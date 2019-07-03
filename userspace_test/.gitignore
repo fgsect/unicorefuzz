@@ -1,0 +1,5 @@
+afl-qemu
+inputs
+run.sh
+outputs
+a.out
