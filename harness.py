@@ -36,23 +36,22 @@ def unicorn_debug_instruction(uc, address, size, user_data):
 def unicorn_debug_block(uc, address, size, user_data):
     print("Basic Block: addr=0x{0:016x}, size=0x{1:016x}".format(address, size))
 
+
 def unicorn_debug_mem_access(uc, access, address, size, value, user_data):
     if access == UC_MEM_WRITE:
         print("        >>> Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(address, size, value))
     else:
         print("        >>> Read: addr=0x{0:016x} size={1}".format(address, size))
 
+
 def unicorn_debug_mem_invalid_access(uc, access, address, size, value, user_data):
-    print("unicorn_debug_mem_invalid_access(uc, access, address, size, value, user_data)")
+    print("unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={})".format(uc, access, address, size, value, user_data))
     if access == UC_MEM_WRITE_UNMAPPED:
         print("        >>> INVALID Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(address, size, value))
     else:
         print("        >>> INVALID Read: addr=0x{0:016x} size={1}".format(address, size))
     util.map_page_blocking(uc, address)
     return True
-
-def hook_invalid_ins(uc, port, size, value, user_data):
-    print("hook entered")
 
 
 def force_crash(uc_error):
@@ -82,10 +81,10 @@ def main(input_file, debug=False):
         uc.hook_add(UC_HOOK_BLOCK, unicorn_debug_block)
         uc.hook_add(UC_HOOK_CODE, unicorn_debug_instruction)
         uc.hook_add(UC_HOOK_MEM_WRITE | UC_HOOK_MEM_READ | UC_HOOK_MEM_FETCH, unicorn_debug_mem_access)
-    uc.hook_add(UC_HOOK_INSN, util.cpu_cmpxchg_double, None, 1, 0, UC_X86_INS_SYSCALL)
+    #uc.hook_add(UC_HOOK_INSN, util.cpu_cmpxchg_double, None, 1, 0, UC_X86_INS_SYSCALL)
     uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access)
 
-    rip = uc.reg_read(UC_X86_REG_RIP)
+    rip = util.fetch_register("rip")
     config.EXITS[rip+config.LENGTH] = 0
     util.map_known_mem(uc)
 
@@ -105,7 +104,7 @@ def main(input_file, debug=False):
     if args.debug:
         print("hic sunt dracones!")
     try:
-        uc.emu_start(rip, 0x0, timeout=0, count=0)
+        uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
     except UcError as e:
         print("Execution failed with error: {} at address {:x}".format(e, uc.reg_read(UC_X86_REG_RIP)))
         force_crash(e)

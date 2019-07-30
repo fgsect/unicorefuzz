@@ -142,80 +142,11 @@ def load_registers(uc):
 
 
 def fetch_register(name):
-    with open("../dump/"+name, "r") as f:
+    with open(os.path.join(config.WORKDIR, "state", name), "r") as f:
         return int(f.read())
 
 def _base_address(address):
     return address - address % 0x1000
-
-
-def cpu_cmpxchg_double(uc, user_data):
-    """
-    We had to rewrite cmpxchg16b as Unicorn segfaults or crashes otherwise or throws an illegal insn or...
-    """
-    address = uc.reg_read(UC_X86_REG_RIP)
-    if address in config.EXITS.keys():
-        print("Run over at {0:x}".format(address))
-        uc.emu_stop()
-        os._exit(config.EXITS[address])
-        return
-
-    if address not in config.CMPEXCHG16B_ADDRS.keys():
-        print("Not CMPEXCHG16B_ADDRESSES, real syscall(?) {}".format(address))
-        return
-    print("Hello from friendly cmpxchg16b at {}".format(hex(address)))
-    CMPXCHG_SIZE = 5
-
-    # cmpxchg16b	xmmword ptr gs:[rdi]
-
-    gs_base = get_gs_base(uc)
-
-    reg = uc.reg_read(globals()["UC_X86_REG_" + config.CMPEXCHG16B_ADDRS[address]])
-    addr = gs_base + reg
-
-    # TEMP128 <- DEST
-    # IF (RDX:RAX = TEMP128)
-    #    THEN
-    #        ZF <- 1;
-    #        DEST <- RCX:RBX;
-    #    ELSE
-    #        ZF <- 0;
-    #        RDX:RAX <- TEMP128;
-    #        DEST <- TEMP128;
-    #        FI;
-    # FI
-
-    # 128 bit at this position
-    content_higher = struct.unpack("<Q", uc.mem_read(addr, 8))[0]
-    content_lower = struct.unpack("<Q", uc.mem_read(addr + 8, 8))[0]
-
-    rax = uc.reg_read(UC_X86_REG_RAX)
-    rdx = uc.reg_read(UC_X86_REG_RDX)
-
-    print("Comparing {}:{} -> {}:{}".format(hex(content_higher), hex(content_lower), hex(rax), hex(rdx)))
-
-    if content_higher == rax and content_lower == rdx:
-        uc.mem_write(addr, struct.pack("<Q", uc.reg_read(UC_X86_REG_RBX)))
-        uc.mem_write(addr + 8, struct.pack("<Q", uc.reg_read(UC_X86_REG_RCX)))
-
-        # set zflag
-        flags = uc.reg_read(UC_X86_REG_EFLAGS)
-        flags |= 0b1000000
-        uc.reg_write(UC_X86_REG_EFLAGS, flags)
-
-        print("EFLAGS: {0:b}, higher: {1}, lower: {2}".format(flags, hex(uc.reg_read(UC_X86_REG_RBX)),
-                                                              hex(uc.reg_read(UC_X86_REG_RCX))))
-
-    else:
-        raise Exception("Lock not acquired, we're single threaded. UNICORE OOPS at {}".format(hex(address)))
-
-    print("Leaving hook. New RIP: {}".format(hex(address + CMPXCHG_SIZE)))
-    uc.emu_stop()
-    try:
-        uc.emu_start(address + CMPXCHG_SIZE, 0x0)
-    except Exception as e:
-        print("Execution failed with error: {} at address 0x{:x}".format(e, uc.reg_read(UC_X86_REG_RIP)))
-        os._exit(1)
 
 
 def fix_cmpexchg16(uc, base_address):
@@ -233,13 +164,13 @@ def fix_cmpexchg16(uc, base_address):
             uc.mem_write(end_addr, SYSCALL_OPCODE)
 
 
-def map_page_blocking(uc, address):
+def map_page_blocking(uc, address, workdir=config.WORKDIR):
     """
     Maps a page at addr in the harness, asking probe_wrapper.
     """
     base_address = _base_address(address)
-    input_file_name = "../input/{0:016x}".format(address)
-    dump_file_name = "../dump/{0:016x}".format(base_address)
+    input_file_name = os.path.join(workdir, "requests", "{0:016x}".format(address))
+    dump_file_name = os.path.join(workdir, "state", "{0:016x}".format(base_address))
     global MAPPED_PAGES
     if base_address not in MAPPED_PAGES:
         if os.path.isfile(dump_file_name + ".rejected"):
@@ -256,12 +187,12 @@ def map_page_blocking(uc, address):
                 with open(dump_file_name, "rb") as f:
                     content = f.read()
                     if len(content) < 0x1000:
-                        time.sleep(0.01)
+                        time.sleep(0.001)
                         continue
                     uc.mem_map(base_address, len(content))
                     uc.mem_write(base_address, content)
                     MAPPED_PAGES.add(base_address)
-                    fix_cmpexchg16(uc, base_address)
+                    #fix_cmpexchg16(uc, base_address)
                     return
             except IOError:
                 pass
@@ -269,12 +200,12 @@ def map_page_blocking(uc, address):
                 print(e)
                 print("map_page_blocking failed: base address={0:016x}".format(base_address))
                 #exit(1)
-            time.sleep(0.001)
 
-def map_known_mem(uc):
-    for filename in os.listdir("../dump"):
-        try:
-            address = int(filename, 16)
-            map_page_blocking(uc, address)
-        except:
-            pass
+def map_known_mem(uc, workdir=config.WORKDIR):
+    for filename in os.listdir(os.path.join(workdir, "state")):
+        if not filename.endswith(".rejected"):
+            try:
+                address = int(filename, 16)
+                map_page_blocking(uc, address)
+            except:
+                pass
