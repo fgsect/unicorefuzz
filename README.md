@@ -4,7 +4,7 @@ Fuzzing the Kernel using AFL Unicorn
 
 ## Unicorefuzz Setup
 * Install Python
-* Clone afl-unicorn and follow installation instructions
+* Clone [afl++](https://github.com/vanhauser-thc/AFLplusplus) and follow instructions to install `./unicorn_mode`
 * `pip install -r requirements.txt`
 
 ## Debug Kernel Setup (Skip this if you know how this works)
@@ -22,13 +22,13 @@ Fuzzing the Kernel using AFL Unicorn
 
 - ensure a target gdbserver is reachable, for example via `./startvm.sh`
 - adopt `config.py`:
-- provide the target's gdbserver network address in the config to the probe wrapper
-- provide the target's target function to the probe wrapper and harness
-- make the harness put AFL's input to the desired memory location by adopting the `place_input` func `config.py`
-- add all EXITs
+    - provide the target's gdbserver network address in the config to the probe wrapper
+    - provide the target's target function to the probe wrapper and harness
+    - make the harness put AFL's input to the desired memory location by adopting the `place_input` func `config.py`
+    - add all EXITs
 - start `./probe_wrapper.py`, it will (try to) connect to gdb.
-- make the target execute the target function
-- run `./start_afl.py`
+- make the target execute the target function (by using it inside the vm)
+- after the breakpoint was hit, run `./start_afl.py`
 
 Putting afl's input to the correct location must be coded invididually for most targets.
 However with modern binary analysis frameworks like IDA or Ghidra it's possible to find the desired location's address.
@@ -58,9 +58,9 @@ To do this, you'll have to provide a non-used `SCRATCH_ADDR` in the `config.py`.
 Right now, the Unicorefuzz `probe_wrapper.py` needs to be manually restarted after an amount of pages has been allocated. Allocated pages don't propagate back to the forkserver parent automatically and would need be reloaded from disk for each iteration.
 
 ### CMPXCHNG16b
-Unicorn does not [handle CMPXCHNG16b correctly](https://github.com/unicorn-engine/unicorn/issues/1095).
+~~Unicorn does not [handle CMPXCHNG16b correctly](https://github.com/unicorn-engine/unicorn/issues/1095).
 Until that is addressed, we needed to hook each cmpxchng16b with a python reimplementation.
 This is super hacky and should only be used if really needed.
 Instead, try to start fuzzing after the instruction or do anything else.
-If you do need it, add all occurrences you want to replace to the `config.py`
-
+If you do need it, add all occurrences you want to replace to the `config.py`~~
+This issue seems to be resolved in the latest unicorn master branch. Unicornmode in AFL++ is based on a recent enough branch to work.
