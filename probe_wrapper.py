@@ -44,10 +44,11 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
             raise("Module but no breakoffset specified. Don't know where to break.")
 
         mem_addr = os.popen("./get_mod_addr.sh " + module).readlines()
-        if len(mem_addr) != 1:
-            print("either module " + module + " has not been loaded or something went wrong with ssh")
-            exit()
-        mem_addr = int(mem_addr[0], 16)
+        try:
+            mem_addr = int(mem_addr[0], 16)
+        except ex as ValueError:
+            print("Error decoding module addr. Either module {} has not been loaded or something went wrong with ssh ({})".format(module, ex))
+            exit(-1)
         print("Module " + module + " is at memory address " + hex(mem_addr))
         breakaddress = hex(mem_addr + breakoffset)
     else:
@@ -72,13 +73,12 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
     for reg in archs.x86.X86_64.special_registers.keys():
         with open(os.path.join(output, reg), "w") as f:
             f.write(str(archs.x86.X86_64.special_registers[reg]))
+    try:
+        os.mkdir(requests)
+    except:
+        pass
 
     while True:
-        try:
-            os.mkdir(requests)
-        except:
-            pass
-
         for filename in os.listdir(requests):
             base_address = _base_address(int(filename, 16))
             try:
@@ -93,7 +93,7 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
                 print(e)
                 open(os.path.join(output, "{0:016x}.rejected".format(base_address)), 'a').close()
             os.remove(os.path.join(requests, filename))
-        time.sleep(1)
+        time.sleep(0.01)
 
 
 if __name__ == "__main__":
