@@ -24,7 +24,6 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
     requests = os.path.join(workdir, "requests")
     output = os.path.join(workdir, "state")
 
-
     if arch != "x64":
         raise("Unsupported arch")
     if reset_state:

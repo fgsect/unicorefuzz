@@ -21,6 +21,7 @@ FSMSR = 0xC0000100
 GSMSR = 0xC0000101
 
 MAPPED_PAGES = set()
+PAGE_SIZE = 0x1000
 
 SYSCALL_OPCODE = b'\x0f\x05'
 
@@ -129,16 +130,18 @@ def load_registers(uc):
     uc.reg_write(UC_X86_REG_FS, fetch_register("gs"))
     uc.reg_write(UC_X86_REG_SS, fetch_register("ss"))
 
-    # gs base stuff is always strange. Better map now than be sorry.
-    #map_page_blocking(uc, fetch_register("gs")
-
-    uc.mem_map(config.SCRATCH_ADDR, config.SCRATCH_SIZE)
-
-    set_gs_base(uc, fetch_register("gs_base"))
-    #print("setting gs_base to "+hex(gs))
-    set_fs_base(uc, fetch_register("fs_base"))
-    #print("setting fs_base to "+hex(gs))
     sys.stdout.flush() # otherwise children will inherit the unflushed buffer
+
+    # prepare to do base register things
+    uc.mem_map(config.SCRATCH_ADDR, config.SCRATCH_SIZE)
+    gs_base = fetch_register("gs_base")
+    fs_base = fetch_register("fs_base")
+
+    # This will execute code -> starts afl-unicorn forkserver!
+    set_gs_base(uc, gs_base)
+    #print("setting gs_base to "+hex(gs))
+    set_fs_base(uc, fs_base)
+    #print("setting fs_base to "+hex(gs))
 
 
 def fetch_register(name):
@@ -146,23 +149,31 @@ def fetch_register(name):
         return int(f.read())
 
 def _base_address(address):
-    return address - address % 0x1000
+    return address - address % PAGE_SIZE
 
+def syscall_hook(uc, user_data):
+    """
+    Syscalls rarely happen, so we use them as speedy-ish hook hack for additional exits.
+    """
+    address = uc.reg_read(UC_X86_REG_RIP)
+    if address in config.EXITS:
+        # print("Run over at {0:x}".format(address))
+        uc.emu_stop()
+        os._exit(0)
+        return
+    # could add other hooks here
+    print("No handler for syscall insn at {0:x}".format(address))
 
-def fix_cmpexchg16(uc, base_address):
+def set_exits(uc, base_address):
     """
-    We replace all compxchg16bs and exits with syscalls since they should be rare in kernel code.
-    Then when we encounter a syscall, we figure out which of the two (three?) occurred.
+    We replace all hooks and exits with syscalls since they should be rare in kernel code.
+    Then, when we encounter a syscall, we figure out if a syscall or exit occurred.
+    This can also be used to add additional hooks in the future.
     """
-    for bad_addr in config.CMPEXCHG16B_ADDRS.keys():
-        if _base_address(bad_addr) == base_address:
-            print("Overwriting {0:x} with syscall insn (base: {1:x})".format(bad_addr, _base_address(bad_addr)))
-            uc.mem_write(bad_addr, SYSCALL_OPCODE)
-    for end_addr in config.EXITS.keys():
+    for end_addr in config.EXITS:
         if _base_address(end_addr) == base_address:
             print("Setting exit {0:x}".format(end_addr))
             uc.mem_write(end_addr, SYSCALL_OPCODE)
-
 
 def map_page_blocking(uc, address, workdir=config.WORKDIR):
     """
@@ -186,13 +197,13 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
                     os.kill(os.getpid(), signal.SIGSEGV)
                 with open(dump_file_name, "rb") as f:
                     content = f.read()
-                    if len(content) < 0x1000:
+                    if len(content) < PAGE_SIZE:
                         time.sleep(0.001)
                         continue
                     uc.mem_map(base_address, len(content))
                     uc.mem_write(base_address, content)
                     MAPPED_PAGES.add(base_address)
-                    #fix_cmpexchg16(uc, base_address)
+                    set_exits(uc, base_address)
                     return
             except IOError:
                 pass

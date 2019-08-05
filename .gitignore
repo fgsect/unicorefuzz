@@ -27,3 +27,5 @@ modules.order
 core.*
 debootstrap
 unicore_workdir
+uDdbg
+.fuse*

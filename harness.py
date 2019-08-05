@@ -78,19 +78,41 @@ def main(input_file, debug=False):
     uc = Uc(UC_ARCH_X86, UC_MODE_64)
 
     if debug:
-        uc.hook_add(UC_HOOK_BLOCK, unicorn_debug_block)
-        uc.hook_add(UC_HOOK_CODE, unicorn_debug_instruction)
-        uc.hook_add(UC_HOOK_MEM_WRITE | UC_HOOK_MEM_READ | UC_HOOK_MEM_FETCH, unicorn_debug_mem_access)
-    #uc.hook_add(UC_HOOK_INSN, util.cpu_cmpxchg_double, None, 1, 0, UC_X86_INS_SYSCALL)
+        sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), "uDdbg"))  
+        try: 
+            from udbg import UnicornDbg
+            has_unicorn = True
+            print("Debugging with uDdbg")
+        except: 
+            print("Debugging without uDdbg (install with ./setupdebug.sh)")
+            uc.hook_add(UC_HOOK_BLOCK, unicorn_debug_block)
+            uc.hook_add(UC_HOOK_CODE, unicorn_debug_instruction)
+            uc.hook_add(UC_HOOK_MEM_WRITE | UC_HOOK_MEM_READ | UC_HOOK_MEM_FETCH, unicorn_debug_mem_access)
+            has_unicorn = False
+
+    # On error: map memory.
     uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access)
 
     rip = util.fetch_register("rip")
-    config.EXITS[rip+config.LENGTH] = 0
+
+    if len(config.EXITS) or len(config.ENTRY_RELATIVE_EXITS):
+        # if we only have a single exit, there is no need to potentially slow down execution with the syscall insn hook
+        uc.hook_add(UC_HOOK_INSN, util.syscall_hook, None, 1, 0, UC_X86_INS_SYSCALL)
+
+        # add MODULE_EXITS to EXITS
+        config.EXITS += [x + rip for x in config.ENTRY_RELATIVE_EXITS]
+        # add final exit to EXITS
+        config.EXITS.append(rip+config.LENGTH)
+
     util.map_known_mem(uc)
 
+    if debug:
+        print("Reading from file {}".format(input_file))
+
+
+    # All done. Ready to fuzz.
     util.load_registers(uc) # starts the afl forkserver
 
-    #print(str(input_file))
     input_file = open(input_file, 'rb') # load afl's input
     input = input_file.read()
     input_file.close()
@@ -101,17 +123,28 @@ def main(input_file, debug=False):
         print("Error setting testcase for input {}: {}".format(input, ex))
         os._exit(1)
 
-    if args.debug:
+    if not args.debug:
+        try:
+            uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
+        except UcError as e:
+            print("Execution failed with error: {} at address {:x}".format(e, uc.reg_read(UC_X86_REG_RIP)))
+            force_crash(e)
+        os._exit(0) # Exit without clean python vm shutdown: "The os._exit() function can be used if it is absolutely positively necessary to exit immediately (for example, in the child process after a call to os.fork())."
+    else:
         print("hic sunt dracones!")
-    try:
-        uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
-    except UcError as e:
-        print("Execution failed with error: {} at address {:x}".format(e, uc.reg_read(UC_X86_REG_RIP)))
-        force_crash(e)
-
-    if args.debug:
+        if has_unicorn:
+            udbg = UnicornDbg()
+            # TODO: Handle mappings differently? Update them at some point?
+            udbg.initialize(emu_instance=uc, entry_point=rip, exit_point=rip+config.LENGTH,
+                hide_binary_loader=True, mappings=[(hex(x), x, util.PAGE_SIZE) for x in util.MAPPED_PAGES])
+            udbg.start() 
+        else:
+            try:
+                uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
+            except UcError as e:
+                print("Execution failed with error: {} at address {:x}".format(e, uc.reg_read(UC_X86_REG_RIP)))
+                raise
         print("Done.")
-    os._exit(0) # Exit without clean python vm shutdown: "The os._exit() function can be used if it is absolutely positively necessary to exit immediately (for example, in the child process after a call to os.fork())."
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test harness for our sample kernel module")
