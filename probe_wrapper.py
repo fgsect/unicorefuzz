@@ -36,7 +36,7 @@ def forward_requests(target, workdir, requests_path, output_path):
             except Exception as e:
                 print("Could not get memory region at {}: {} (Found mem corruption?)".format(hex(base_address), repr(e)))
                 with open(os.path.join(output_path, "{0:016x}.rejected".format(base_address)), 'a') as f:
-                    f.write(repr(e).encode("utf-8"))
+                    f.write(repr(e))
             os.remove(os.path.join(requests_path, filename))
         filenames = os.listdir(requests_path)
 

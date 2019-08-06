@@ -29,3 +29,4 @@ debootstrap
 unicore_workdir
 uDdbg
 .fuse*
+AFLplusplus
