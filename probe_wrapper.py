@@ -4,9 +4,9 @@ import socket
 import re
 import sys
 import time
-from avatar2 import archs, Avatar, GDBTarget
-from IPython import embed
 import shutil
+import inotify.adapters
+from avatar2 import archs, Avatar, GDBTarget
 from sh import which
 from util import _base_address
 
@@ -20,19 +20,40 @@ def dump(workdir, target, base_address):
         f.write(mem)
 
 
+def forward_requests(target, workdir, requests_path, output_path):
+    filenames = os.listdir(requests_path)
+    while len(filenames):
+        for filename in filenames:
+            base_address = _base_address(int(filename, 16))
+            try:
+                print("Reading {0:016x}".format(base_address))
+                if not os.path.isfile(os.path.join(output_path, str(base_address))):
+                    dump(workdir, target, base_address)
+                    # we should restart afl now
+            except KeyboardInterrupt as ex:
+                print("cya")
+                exit(0)
+            except Exception as e:
+                print("Could not get memory region at {}: {} (Found mem corruption?)".format(hex(base_address), repr(e)))
+                with open(os.path.join(output_path, "{0:016x}.rejected".format(base_address)), 'a') as f:
+                    f.write(repr(e).encode("utf-8"))
+            os.remove(os.path.join(requests_path, filename))
+        filenames = os.listdir(requests_path)
+
+
 def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=True, arch="x64"):
-    requests = os.path.join(workdir, "requests")
-    output = os.path.join(workdir, "state")
+    request_path = os.path.join(workdir, "requests")
+    output_path = os.path.join(workdir, "state")
 
     if arch != "x64":
         raise("Unsupported arch")
     if reset_state:
         try:
-            shutil.rmtree(output)
+            shutil.rmtree(output_path)
         except:
             pass
     try:
-        os.makedirs(output, exist_ok=True)
+        os.makedirs(output_path, exist_ok=True)
     except:
         pass
 
@@ -67,33 +88,26 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
 
     # dump registers
     for reg in list(archs.x86.X86_64.registers.keys()) + ["fs_base", "gs_base"]:
-        with open(os.path.join(output, reg), "w") as f:
+        with open(os.path.join(output_path, reg), "w") as f:
             f.write(str(target.read_register(reg)))
     for reg in archs.x86.X86_64.special_registers.keys():
-        with open(os.path.join(output, reg), "w") as f:
+        with open(os.path.join(output_path, reg), "w") as f:
             f.write(str(archs.x86.X86_64.special_registers[reg]))
     try:
-        os.mkdir(requests)
+        os.mkdir(request_path)
     except:
         pass
 
-    while True:
-        for filename in os.listdir(requests):
-            base_address = _base_address(int(filename, 16))
-            try:
-                print("Reading {0:016x}".format(base_address))
-                if not os.path.isfile(os.path.join(output, str(base_address))):
-                    dump(workdir, target, base_address)
-                    # we should restart afl now
-            except KeyboardInterrupt as ex:
-                print("cya")
-                exit(0)
-            except Exception as e:
-                print(e)
-                open(os.path.join(output, "{0:016x}.rejected".format(base_address)), 'a').close()
-            os.remove(os.path.join(requests, filename))
-        time.sleep(0.01)
+    forward_requests(target, workdir, request_path, output_path)
 
+    i = inotify.adapters.Inotify()
+    i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE) # only readily written files
+    for event in i.event_gen(yield_nones=False):
+        print("Request: ", event)
+        forward_requests(target, workdir, request_path, output_path)
+
+    print("[*] Exiting probe_wrapper (keyboard interrupt)")
+    
 
 if __name__ == "__main__":
     import config
