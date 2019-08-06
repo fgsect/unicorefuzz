@@ -50,7 +50,11 @@ def unicorn_debug_mem_invalid_access(uc, access, address, size, value, user_data
         print("        >>> INVALID Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(address, size, value))
     else:
         print("        >>> INVALID Read: addr=0x{0:016x} size={1}".format(address, size))
-    util.map_page_blocking(uc, address)
+    try:
+        util.map_page_blocking(uc, address)
+    except KeyboardInterrupt:
+        uc.emu_stop()
+        return False
     return True
 
 
@@ -112,6 +116,8 @@ def main(input_file, debug=False, trace=False):
     if debug or trace:
         print("[*] Reading from file {}".format(input_file))
 
+    # last chance for a change!
+    config.init_func(uc, rip)
 
     # All done. Ready to fuzz.
     util.load_registers(uc) # starts the afl forkserver

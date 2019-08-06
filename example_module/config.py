@@ -30,6 +30,16 @@ ENTRY_RELATIVE_EXITS = [
 # The location used to store data and logs
 WORKDIR = os.path.join(UNICORE_PATH, "unicore_workdir")
 
+
+def init_func(uc, rip): 
+    """
+    An init function called before forking.
+    This function may be used to set additional unicorn hooks and things.
+    If you uc.run_emu here, you will trigger the forkserver. Try not to/do that in place_input. :)
+    """
+    pass
+
+
 # This function gets the current input and places it in the memory.
 # It will be called for each execution, so keep it lightweight.
 # This can be compared to a testcase in libfuzzer.
