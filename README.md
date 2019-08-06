@@ -18,7 +18,7 @@ Fuzzing the Kernel using AFL Unicorn
 * To only get necessary kernel modules boot the current system and execute `lsmod > mylsmod` and copy the mylsmod file to your host system into the linux kernel folder that you downloaded. Then you can use `make LSMOD=mylsmod localmodconfig` to only make the kernel modules that are actually needed by the guest system. Then you can compile the kernel like normal with `make`. Then mount the guest file system to `/mnt` and use `make modules_install INSTALL_MOD_PATH=/mnt`. At last you have to create a new initramfs, which apparently has to be done on the guest system. Here use `mkinitcpio -k <folder in /lib/modules/...> -g <where to put initramfs>`. Then you just need to copy that back to the host and let qemu know where your kernel and the initramfs are located.
 * Setting breakpoints anywhere else is possible. For this, set `BREAKADDR` in the `config.py` instead.
 * If you want fancy debugging, install [uDdbg](https://github.com/iGio90/uDdbg) with `./setupdebug.sh`
-* Before fuzzing, run `sudo ./setkernelops.sh` to initialize your system for fuzzing.
+* Before fuzzing, run `sudo ./setaflops.sh` to initialize your system for fuzzing.
 
 ## Run
 
