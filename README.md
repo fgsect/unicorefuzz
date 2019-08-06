@@ -30,7 +30,7 @@ Fuzzing the Kernel using AFL Unicorn
     - add all EXITs
 - start `./probe_wrapper.py`, it will (try to) connect to gdb.
 - make the target execute the target function (by using it inside the vm)
-- after the breakpoint was hit, run `./startafl.py`. Make sure afl++ is in the PATH.
+- after the breakpoint was hit, run `./startafl.sh`. Make sure afl++ is in the PATH. (Use `./resumeafl.sh` to resume using the same input folder)
 
 Putting afl's input to the correct location must be coded invididually for most targets.
 However with modern binary analysis frameworks like IDA or Ghidra it's possible to find the desired location's address.
@@ -60,10 +60,18 @@ This dynamic method makes it rahter easy to find out breakpoints and that can th
 On top, `startafl.sh` will forward port 22 (ssh) to 8022 - you can use it to ssh into the VM.
 This makes it easier to interact with it.
 
+## Debugging
+You can step through the code, starting at the breakpoint, with any given input.
+To do so, run `./harness.py -d $inputfile`.
+Possible inputs to the harness:
+
+`-d` flag starts the unicorn debugger ([uDdbg](https://github.com/iGio90/uDdbg)) that has to be installed using `./setupdebug.sh` first.
+`-t` flag enables the afl-unicorn tracer. It prints every emulated instruction, as well as displays memory accesses.
+
 ## Gotchas
 A few things to consider.
 
-### FS_BASE and GS_BASE
+### FS\_BASE and GS\_BASE
 
 Unicorn does not offer a way to directly set model specific registers. Since kernels use them to store pointers to process- or cpu-specific memory, Unicorefuzz makes unicorn execute `wrmsr` to set the `fs` and `gs` registers to the appropriate values.
 To do this, you'll have to provide a non-used `SCRATCH_ADDR` in the `config.py`.
