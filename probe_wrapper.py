@@ -66,7 +66,7 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
         mem_addr = os.popen("./get_mod_addr.sh " + module).readlines()
         try:
             mem_addr = int(mem_addr[0], 16)
-        except ex as ValueError:
+        except ValueError as ex:
             print("Error decoding module addr. Either module {} has not been loaded or something went wrong with ssh ({})".format(module, ex))
             exit(-1)
         print("Module " + module + " is at memory address " + hex(mem_addr))

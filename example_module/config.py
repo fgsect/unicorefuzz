@@ -9,19 +9,20 @@ SCRATCH_ADDR = 0x80000
 SCRATCH_SIZE = 0x1000
 
 # Either set this to load the module from the VM and break at module + offset...
-MODULE = "procfs1"
-BREAKOFFSET = 0x10
+MODULE = None#"cifs"
+BREAKOFFSET = None#0x35c00
 
 # Or this to break at a fixed offset.
-BREAKADDR = None 
+BREAKADDR = 0xffffffffc04bfc00
 # You cannot set MODULE and BREAKOFFSET at the same time
 
 # Length of the function to fuzz (usually the return address)
-LENGTH = 0x19d - BREAKOFFSET
+LENGTH = 0xffffffffc04bfbc7 - BREAKADDR
 
 # Additional exits here. 
 # The Exit at entry + LENGTH will be added automatically.
 EXITS = [
+    0xffffffffc04bfbc7
 ]
 # Exits realtive to the initial rip (entrypoint + addr)
 ENTRY_RELATIVE_EXITS = [
@@ -68,7 +69,17 @@ def place_input_skb(uc, input):
 
 def place_input(uc, input):
     import util
-    from unicorn.x86_const import UC_X86_REG_RAX
-    rax = uc.reg_read(UC_X86_REG_RAX)
-    util.map_page_blocking(uc, rax) # make sure the parameter memory is mapped
-    uc.mem_write(rax, input) # insert afl input
+    from unicorn.x86_const import UC_X86_REG_RDI, UC_X86_REG_RSI 
+
+    if len(input) > 512:
+        import os
+        os._exit(0) # probably too big anyway.
+
+    # ulong decode_negTokenInit(char *security_blob, ulong length, byte *param_3) => RDI, RSI, ... 
+
+    # read input to the correct position at param rdi here:
+    rdi = uc.reg_read(UC_X86_REG_RDI)
+    #rsi = uc.reg_read(UC_X86_REG_RSI)
+    util.map_page_blocking(uc, rdi) # ensure security_blob is mapped
+    uc.mem_write(rdi, input) # insert afl input
+    uc.reg_write(UC_X86_REG_RSI, len(input)) # write length
