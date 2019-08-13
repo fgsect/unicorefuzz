@@ -143,9 +143,13 @@ def main(input_file, debug=False, trace=False):
     else:
         print("[*] Starting debugger...")
         udbg = UnicornDbg()
+        
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
         udbg.initialize(emu_instance=uc, entry_point=rip, exit_point=rip+config.LENGTH,
             hide_binary_loader=True, mappings=[(hex(x), x, util.PAGE_SIZE) for x in util.MAPPED_PAGES])
+        def dbg_except(x,y ):
+            raise Exception(y)
+        os.kill = dbg_except
         udbg.start() 
         # TODO will never reach done, probably.
         print("[*] Done.")
