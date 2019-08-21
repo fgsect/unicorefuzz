@@ -8,7 +8,9 @@ import shutil
 import inotify.adapters
 from avatar2 import archs, Avatar, GDBTarget
 from sh import which
-from util import _base_address
+from util import _base_address, get_arch, all_regs
+
+from IPython import embed
 
 GDB_PORT = 1234
 GDB_PATH = which("gdb")
@@ -74,7 +76,7 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
     else:
         breakaddress = hex(breakaddress)
 
-    avatar = Avatar(arch=archs.x86.X86_64, output_directory=os.path.join(workdir, "avatar"))
+    avatar = Avatar(arch=get_arch(arch), output_directory=os.path.join(workdir, "avatar"))
     target = avatar.add_target(GDBTarget, gdb_port=GDB_PORT, gdb_executable=GDB_PATH)
     target.init()
 
@@ -87,18 +89,32 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
     print("hit! dumping registers and memory")
 
     # dump registers
-    for reg in list(archs.x86.X86_64.registers.keys()) + ["fs_base", "gs_base"]:
-        with open(os.path.join(output_path, reg), "w") as f:
-            f.write(str(target.read_register(reg)))
-    for reg in archs.x86.X86_64.special_registers.keys():
-        with open(os.path.join(output_path, reg), "w") as f:
-            f.write(str(archs.x86.X86_64.special_registers[reg]))
+    for reg in all_regs(get_arch(arch)):
+        written = True
+        reg_file = os.path.join(output_path, reg)
+        with open(reg_file, "w") as f:
+            try:
+                val = target.read_register(reg)
+                if isinstance(val, list):
+                    # Avatar special registers (xmm, ...)
+                    i32list = val
+                    val = 0
+                    for shift, i32 in enumerate(i32list):
+                        val += (i32 << (shift * 32))
+                f.write(str(val))
+            except Exception as ex:
+                written = False
+                print("Ignoring {}: {}".format(reg, ex))
+        if not written:
+            os.unlink(reg_file)
+
     try:
         os.mkdir(request_path)
     except:
         pass
 
     forward_requests(target, workdir, request_path, output_path)
+    print("Initial dump complete. Listening for requests from ./harness.py.")
 
     i = inotify.adapters.Inotify()
     i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE) # only readily written files
@@ -111,4 +127,4 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
 
 if __name__ == "__main__":
     import config
-    main(module=config.MODULE, breakoffset=config.BREAKOFFSET, breakaddress=config.BREAKADDR, workdir=config.WORKDIR) #main(module="procfs1", breakoffset=0x10, input=config.INPUT_DIR, output=config.OUTPUT_DIR)
+    main(module=config.MODULE, breakoffset=config.BREAKOFFSET, breakaddress=config.BREAKADDR, workdir=config.WORKDIR, arch=config.ARCH) #main(module="procfs1", breakoffset=0x10, input=config.INPUT_DIR, output=config.OUTPUT_DIR)

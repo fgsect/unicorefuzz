@@ -3,6 +3,9 @@
 import os
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
+# Set a supported architecture
+ARCH = "x64"
+
 # A place to put scratch memory to. Non-kernelspace foo should be fine
 SCRATCH_ADDR = 0x80000
 # How much scratch to add. We don't ask for much.
