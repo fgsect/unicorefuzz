@@ -13,12 +13,14 @@ from unicorn.x86_const import *
 from capstone import *
 from capstone.x86 import *
 
+from IPython import embed
+
 import util
 
 import config 
 
+cs = util.init_capstone(util.get_arch(config.ARCH))
 
-cs = Cs(CS_ARCH_X86, CS_MODE_64)
 
 def unicorn_debug_instruction(uc, address, size, user_data):
     try:
@@ -79,7 +81,8 @@ def force_crash(uc_error):
 
 def main(input_file, debug=False, trace=False):
 
-    uc = Uc(UC_ARCH_X86, UC_MODE_64)
+    arch = util.get_arch(config.ARCH)
+    uc = Uc(arch.unicorn_arch, arch.unicorn_mode)
 
     if debug:
         # Try to load udbg
@@ -136,7 +139,7 @@ def main(input_file, debug=False, trace=False):
         try:
             uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
         except UcError as e:
-            print("[!] Execution failed with error: {} at address {:x}".format(e, uc.reg_read(UC_X86_REG_RIP)))
+            print("[!] Execution failed with error: {} at address {:x}".format(e, util.get_pc(uc, arch)))
             force_crash(e)
         # Exit without clean python vm shutdown: "The os._exit() function can be used if it is absolutely positively necessary to exit immediately"
         os._exit(0)
