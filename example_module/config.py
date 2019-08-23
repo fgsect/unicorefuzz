@@ -3,13 +3,16 @@
 import os
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
+# A place to put scratch memory to. Non-kernelspace address should be fine.
+SCRATCH_ADDR = 0x80000
+# How much scratch to add. We don't ask for much. Default should be fine.
+SCRATCH_SIZE = 0x1000
+
 # Set a supported architecture
 ARCH = "x64"
 
-# A place to put scratch memory to. Non-kernelspace foo should be fine
-SCRATCH_ADDR = 0x80000
-# How much scratch to add. We don't ask for much.
-SCRATCH_SIZE = 0x1000
+# The gdb port to connect to
+GDB_PORT = 1234
 
 # Either set this to load the module from the VM and break at module + offset...
 MODULE = "procfs1"
@@ -52,7 +55,7 @@ def place_input_skb(uc, input):
     Places the input in memory and alters the input.
     This is an example for sk_buff in openvsswitch
     """
-    import util
+    import utils
     import struct
     from unicorn.x86_const import UC_X86_REG_RDX, UC_X86_REG_RDI
 
@@ -63,15 +66,15 @@ def place_input_skb(uc, input):
     # read input to the correct position at param rdx here:
     rdx = uc.reg_read(UC_X86_REG_RDX)
     rdi = uc.reg_read(UC_X86_REG_RDI)
-    util.map_page_blocking(uc, rdx) # ensure sk_buf is mapped
+    utils.map_page_blocking(uc, rdx) # ensure sk_buf is mapped
     bufferPtr = struct.unpack("<Q",uc.mem_read(rdx + 0xd8, 8))[0]
-    util.map_page_blocking(uc, bufferPtr) # ensure the buffer is mapped
+    utils.map_page_blocking(uc, bufferPtr) # ensure the buffer is mapped
     uc.mem_write(rdi, input) # insert afl input
     uc.mem_write(rdx + 0xc4, b"\xdc\x05") # fix tail
 
 def place_input(uc, input):
-    import util
+    import utils
     from unicorn.x86_const import UC_X86_REG_RAX
     rax = uc.reg_read(UC_X86_REG_RAX)
-    util.map_page_blocking(uc, rax) # make sure the parameter memory is mapped
+    utils.map_page_blocking(uc, rax) # make sure the parameter memory is mapped
     uc.mem_write(rax, input) # insert afl input

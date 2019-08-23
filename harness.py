@@ -7,19 +7,17 @@ import json
 import time
 import struct
 
-from IPython import embed
 from unicorn import *
 from unicorn.x86_const import *
 from capstone import *
 from capstone.x86 import *
 
-from IPython import embed
-
-import util
+import utils
+import x64utils
 
 import config 
 
-cs = util.init_capstone(util.get_arch(config.ARCH))
+cs = utils.init_capstone(utils.get_arch(config.ARCH))
 
 
 def unicorn_debug_instruction(uc, address, size, user_data):
@@ -53,7 +51,7 @@ def unicorn_debug_mem_invalid_access(uc, access, address, size, value, user_data
     else:
         print("        >>> INVALID Read: addr=0x{0:016x} size={1}".format(address, size))
     try:
-        util.map_page_blocking(uc, address)
+        utils.map_page_blocking(uc, address)
     except KeyboardInterrupt:
         uc.emu_stop()
         return False
@@ -81,7 +79,7 @@ def force_crash(uc_error):
 
 def main(input_file, debug=False, trace=False):
 
-    arch = util.get_arch(config.ARCH)
+    arch = utils.get_arch(config.ARCH)
     uc = Uc(arch.unicorn_arch, arch.unicorn_mode)
 
     if debug:
@@ -103,18 +101,22 @@ def main(input_file, debug=False, trace=False):
     # On error: map memory.
     uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access)
 
-    rip = util.fetch_register("rip")
+    rip = utils.fetch_register("rip")
 
+    # if we only have a single exit, there is no need to potentially slow down execution with an insn hook.
     if len(config.EXITS) or len(config.ENTRY_RELATIVE_EXITS):
-        # if we only have a single exit, there is no need to potentially slow down execution with the syscall insn hook
-        uc.hook_add(UC_HOOK_INSN, util.syscall_hook, None, 1, 0, UC_X86_INS_SYSCALL)
 
         # add MODULE_EXITS to EXITS
         config.EXITS += [x + rip for x in config.ENTRY_RELATIVE_EXITS]
         # add final exit to EXITS
         config.EXITS.append(rip+config.LENGTH)
 
-    util.map_known_mem(uc)
+        if arch == utils.X64:
+            exit_hook = x64utils.init_syscall_hook(config.EXITS, os._exit)
+            uc.hook_add(UC_HOOK_INSN, exit_hook, None, 1, 0, UC_X86_INS_SYSCALL)
+        #TODO: Fast solution for X86, ARM, ...
+
+    utils.map_known_mem(uc)
 
     if debug or trace:
         print("[*] Reading from file {}".format(input_file))
@@ -123,7 +125,7 @@ def main(input_file, debug=False, trace=False):
     config.init_func(uc, rip)
 
     # All done. Ready to fuzz.
-    util.load_registers(uc) # starts the afl forkserver
+    utils.uc_load_registers(uc) # starts the afl forkserver
 
     input_file = open(input_file, 'rb') # load afl's input
     input = input_file.read()
@@ -139,7 +141,7 @@ def main(input_file, debug=False, trace=False):
         try:
             uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
         except UcError as e:
-            print("[!] Execution failed with error: {} at address {:x}".format(e, util.get_pc(uc, arch)))
+            print("[!] Execution failed with error: {} at address {:x}".format(e, utils.uc_get_pc(uc, arch)))
             force_crash(e)
         # Exit without clean python vm shutdown: "The os._exit() function can be used if it is absolutely positively necessary to exit immediately"
         os._exit(0)
@@ -149,7 +151,7 @@ def main(input_file, debug=False, trace=False):
         
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
         udbg.initialize(emu_instance=uc, entry_point=rip, exit_point=rip+config.LENGTH,
-            hide_binary_loader=True, mappings=[(hex(x), x, util.PAGE_SIZE) for x in util.MAPPED_PAGES])
+            hide_binary_loader=True, mappings=[(hex(x), x, utils.PAGE_SIZE) for x in utils.MAPPED_PAGES])
         def dbg_except(x,y ):
             raise Exception(y)
         os.kill = dbg_except

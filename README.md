@@ -40,9 +40,9 @@ The following `place_input` method places at the data section of `sk_buff` in `k
 ```python
     # read input into param xyz here:
     rdx = uc.reg_read(UC_X86_REG_RDX)
-    util.map_page_blocking(uc, rdx) # ensure sk_buf is mapped
+    utils.map_page_blocking(uc, rdx) # ensure sk_buf is mapped
     bufferPtr = struct.unpack("<Q",uc.mem_read(rdx + 0xd8, 8))[0]
-    util.map_page_blocking(uc, bufferPtr) # ensure the buffer is mapped
+    utils.map_page_blocking(uc, bufferPtr) # ensure the buffer is mapped
     uc.mem_write(rdx, input) # insert afl input
     uc.mem_write(rdx + 0xc4, b"\xdc\x05") # fix tail
 ```

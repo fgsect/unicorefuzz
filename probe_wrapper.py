@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import os
 import socket
 import re
@@ -8,17 +8,15 @@ import shutil
 import inotify.adapters
 from avatar2 import archs, Avatar, GDBTarget
 from sh import which
-from util import _base_address, get_arch, all_regs
+from utils import get_base, get_arch, all_regs, REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING
 
-from IPython import embed
-
-GDB_PORT = 1234
 GDB_PATH = which("gdb")
+
 
 def dump(workdir, target, base_address):
     print("dumping addr=0x{0:016x}".format(base_address))
     mem = target.read_memory(base_address, 0x1000, raw=True)
-    with open(os.path.join(workdir, "state", "{0:016x}".format(base_address)), "wb") as f:
+    with open(os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb") as f:
         f.write(mem)
 
 
@@ -26,7 +24,7 @@ def forward_requests(target, workdir, requests_path, output_path):
     filenames = os.listdir(requests_path)
     while len(filenames):
         for filename in filenames:
-            base_address = _base_address(int(filename, 16))
+            base_address = get_base(int(filename, 16))
             try:
                 print("Reading {0:016x}".format(base_address))
                 if not os.path.isfile(os.path.join(output_path, str(base_address))):
@@ -37,15 +35,15 @@ def forward_requests(target, workdir, requests_path, output_path):
                 exit(0)
             except Exception as e:
                 print("Could not get memory region at {}: {} (Found mem corruption?)".format(hex(base_address), repr(e)))
-                with open(os.path.join(output_path, "{0:016x}.rejected".format(base_address)), 'a') as f:
+                with open(os.path.join(output_path, "{:016x}{}".format(base_address, REJECTED_ENDING)), 'a') as f:
                     f.write(repr(e))
             os.remove(os.path.join(requests_path, filename))
         filenames = os.listdir(requests_path)
 
 
-def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=True, arch="x64"):
-    request_path = os.path.join(workdir, "requests")
-    output_path = os.path.join(workdir, "state")
+def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=True, arch="x64", gdb_port=1234):
+    request_path = os.path.join(workdir, REQUEST_FOLDER)
+    output_path = os.path.join(workdir, STATE_FOLDER)
 
     if arch != "x64":
         raise("Unsupported arch")
@@ -77,16 +75,16 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
         breakaddress = hex(breakaddress)
 
     avatar = Avatar(arch=get_arch(arch), output_directory=os.path.join(workdir, "avatar"))
-    target = avatar.add_target(GDBTarget, gdb_port=GDB_PORT, gdb_executable=GDB_PATH)
+    target = avatar.add_target(GDBTarget, gdb_port=gdb_port, gdb_executable=GDB_PATH)
     target.init()
 
     target.set_breakpoint("*{}".format(breakaddress))
-    print("Breakpoint set at {}".format(breakaddress))
-    print("waiting for bp hit...")
+    print("[*] Breakpoint set at {}".format(breakaddress))
+    print("[+] waiting for bp hit...")
     target.cont()
     target.wait()
 
-    print("hit! dumping registers and memory")
+    print("[+] hit! dumping registers and memory")
 
     # dump registers
     for reg in all_regs(get_arch(arch)):
@@ -103,8 +101,8 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
                         val += (i32 << (shift * 32))
                 f.write(str(val))
             except Exception as ex:
+                #print("Ignoring {}: {}".format(reg, ex))
                 written = False
-                print("Ignoring {}: {}".format(reg, ex))
         if not written:
             os.unlink(reg_file)
 
@@ -114,12 +112,12 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
         pass
 
     forward_requests(target, workdir, request_path, output_path)
-    print("Initial dump complete. Listening for requests from ./harness.py.")
+    print("[*] Initial dump complete. Listening for requests from ./harness.py.")
 
     i = inotify.adapters.Inotify()
     i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE) # only readily written files
     for event in i.event_gen(yield_nones=False):
-        print("Request: ", event)
+        #print("Request: ", event)
         forward_requests(target, workdir, request_path, output_path)
 
     print("[*] Exiting probe_wrapper (keyboard interrupt)")
@@ -127,4 +125,11 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
 
 if __name__ == "__main__":
     import config
-    main(module=config.MODULE, breakoffset=config.BREAKOFFSET, breakaddress=config.BREAKADDR, workdir=config.WORKDIR, arch=config.ARCH) #main(module="procfs1", breakoffset=0x10, input=config.INPUT_DIR, output=config.OUTPUT_DIR)
+    main(
+        module=config.MODULE, 
+        breakoffset=config.BREAKOFFSET, 
+        breakaddress=config.BREAKADDR, 
+        workdir=config.WORKDIR, 
+        arch=config.ARCH,
+        gdb_port=config.GDB_PORT
+    ) 
