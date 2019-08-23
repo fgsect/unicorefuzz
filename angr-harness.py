@@ -42,7 +42,6 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
                 r.reraise()
 
             print("mapping addr: {}".format(addr))
-
             pageaddr, pagecontent = utils.fetch_page_blocking(addr)
             try:
                 s.memory.map_region(pageaddr, len(pagecontent), 7)
@@ -102,7 +101,6 @@ def main(input_file):
         simgr.step()
 
     return
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Angr-Harness for unicorefuzz")
