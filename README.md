@@ -1,6 +1,7 @@
 # Unicorefuzz
 
-Fuzzing the Kernel using AFL Unicorn
+Fuzzing the Kernel using AFL Unicorn.
+For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf).
 
 ## Unicorefuzz Setup
 * Install Python
@@ -88,3 +89,9 @@ Instead, try to start fuzzing after the instruction or do anything else.
 If you do need it, add all occurrences you want to replace to the `config.py`~~
 
 This issue seems to be resolved in the latest unicorn master branch. Unicornmode in AFL++ is based on a recent enough branch to work.
+
+### EXITS
+Exits on X64 use `syscall`, which is a 2 bytes instruction.
+Using it to overwrite `ret` might break the line after the return instruction, since `ret` is only a single byte.
+Instead, consider hooking the op before ret.
+Exits on X86 and ARM are not yet supported. We'll get there :)
