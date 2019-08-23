@@ -11,7 +11,7 @@ from unicorn import UC_HOOK_CODE
 from avatar2.archs import Architecture
 from avatar2.archs.x86 import X86, X86_64
 from avatar2.archs.arm import ARM, ARM_CORTEX_M3, ARMV7M, ARMBE
-#TODO: Add mips? ARM64? More archs?
+# TODO: Add mips? ARM64? More archs?
 
 from unicorn.x86_const import *
 from capstone import *
@@ -25,8 +25,8 @@ import x64utils
 import config
 
 X64 = X86_64
-# TODO: 
-# Fix avatar2 x86 mode upstream 
+# TODO:
+# Fix avatar2 x86 mode upstream
 # (ARM already contains unicorn_* and pc_name)
 X86.pc_name = UC_X86_REG_EIP
 X86.unicorn_arch = unicorn.UC_ARCH_X86
@@ -42,7 +42,7 @@ ARM.unicorn_reg_tag = "UC_ARM_REG_"
 ARM.ignored_regs = []
 ARM.insn_nop = b"\x00\x00\x00\x00"
 X86.unicorn_reg_tag = "UC_X86_REG_"
-X86.ignored_regs = ["cr0"] # CR0 unicorn crash
+X86.ignored_regs = ["cr0"]  # CR0 unicorn crash
 X86.insn_nop = b"\x90"
 
 REQUEST_FOLDER = "requests"
@@ -54,16 +54,17 @@ PAGE_SIZE = 0x1000
 
 SYSCALL_OPCODE = b'\x0f\x05'
 
-#TODO: arm64, mips, etc.
+# TODO: arm64, mips, etc.
 archs = {
-        "x86": X86,
-        "x86_64": X64,
-        "x64": X64,
-        "arm": ARM,
-        "arm_cortex_m3": ARM_CORTEX_M3,
-        "arm_v7m": ARMV7M,
-        "armbe": ARMBE
-    }
+    "x86": X86,
+    "x86_64": X64,
+    "x64": X64,
+    "arm": ARM,
+    "arm_cortex_m3": ARM_CORTEX_M3,
+    "arm_v7m": ARMV7M,
+    "armbe": ARMBE
+}
+
 
 def get_arch(archname):
     """
@@ -73,12 +74,16 @@ def get_arch(archname):
         return archname
     return archs[archname.lower()]
 
+
 def init_capstone(arch):
     if not hasattr(arch, "capstone"):
         arch.capstone = Cs(arch.capstone_arch, arch.capstone_mode)
     return arch.capstone
 
+
 _regs_name_cache = None
+
+
 def all_regs(arch=get_arch(config.ARCH)):
     """
     Get all (supported) registers of an arch
@@ -96,6 +101,7 @@ def all_regs(arch=get_arch(config.ARCH)):
         _regs_name_cache = regs
     return _regs_name_cache
 
+
 def uc_reg_const(arch, reg_name):
     """
     Returns an unicorn register constant to address the register by name.
@@ -104,11 +110,13 @@ def uc_reg_const(arch, reg_name):
     """
     return getattr(arch.unicorn_consts, arch.unicorn_reg_tag + reg_name.upper())
 
+
 def uc_get_pc(uc, arch):
     """
     Gets the current program counter from a unicorn instance
     """
     return uc.reg_read(uc_reg_const(arch, arch.pc_name))
+
 
 def uc_load_registers(uc, arch=get_arch(config.ARCH)):
     """
@@ -123,9 +131,9 @@ def uc_load_registers(uc, arch=get_arch(config.ARCH)):
             uc.reg_write(uc_reg_const(arch, r), fetch_register(r))
         except Exception as ex:
             #print("[d] Faild to load reg: {} ({})".format(r, ex))
-            pass 
+            pass
 
-    sys.stdout.flush() # otherwise children will inherit the unflushed buffer
+    sys.stdout.flush()  # otherwise children will inherit the unflushed buffer
 
     scratch = config.SCRATCH_ADDR
     scratch_size = config.SCRATCH_SIZE
@@ -148,6 +156,7 @@ def uc_load_registers(uc, arch=get_arch(config.ARCH)):
         uc.mem_write(scratch, arch.insn_nop)
         uc.emu_start(scratch, count=1)
 
+
 def angr_load_registers(state):
     """
     """
@@ -157,6 +166,7 @@ def angr_load_registers(state):
         except Exception as ex:
             print("Failed to retrieve register {}: {}".format(reg, ex))
 
+
 def fetch_register(name):
     """
     Loads the value of a register from the dumped state
@@ -164,12 +174,14 @@ def fetch_register(name):
     with open(os.path.join(config.WORKDIR, "state", name), "r") as f:
         return int(f.read())
 
+
 def get_base(address):
     """
     Calculates the base address (aligned to PAGE_SIZE) to an address
     All you base are belong to us.
     """
     return address - address % PAGE_SIZE
+
 
 def set_exits(uc, base_address):
     """
@@ -188,14 +200,17 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
     Fetches a page at addr in the harness, asking probe_wrapper, if necessary.
     """
     base_address = get_base(address)
-    input_file_name = os.path.join(workdir, REQUEST_FOLDER, "{0:016x}".format(address))
-    dump_file_name = os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address))
+    input_file_name = os.path.join(
+        workdir, REQUEST_FOLDER, "{0:016x}".format(address))
+    dump_file_name = os.path.join(
+        workdir, STATE_FOLDER, "{0:016x}".format(base_address))
     global MAPPED_PAGES
     if base_address in MAPPED_PAGES.keys():
         return base_address, MAPPED_PAGES[base_address]
     else:
         if os.path.isfile(dump_file_name + REJECTED_ENDING):
-            raise Exception("Page can not be loaded from Target") # TODO: Exception class?
+            # TODO: Exception class?
+            raise Exception("Page can not be loaded from Target")
             #os.kill(os.getpid(), signal.SIGSEGV)
         if not os.path.isfile(dump_file_name):
             open(input_file_name, 'a').close()
@@ -203,7 +218,8 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
         while 1:
             try:
                 if os.path.isfile(dump_file_name + REJECTED_ENDING):
-                    raise Exception("Page can not be loaded from Target") # TODO: Exception class?
+                    # TODO: Exception class?
+                    raise Exception("Page can not be loaded from Target")
                 with open(dump_file_name, "rb") as f:
                     content = f.read()
                     if len(content) < PAGE_SIZE:
@@ -213,10 +229,11 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
                     return base_address, content
             except IOError:
                 pass
-            except Exception as e: #todo this shouldn't happen if we don't map like idiots
+            except Exception as e:  # todo this shouldn't happen if we don't map like idiots
                 print(e)
-                print("map_page_blocking failed: base address={0:016x}".format(base_address))
-                #exit(1)
+                print("map_page_blocking failed: base address={0:016x}".format(
+                    base_address))
+                # exit(1)
 
 
 def path_for_page(address, workdir=config.WORKDIR):
@@ -232,8 +249,10 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
     Maps a page at addr in the harness, asking probe_wrapper.
     """
     base_address = get_base(address)
-    input_file_name = os.path.join(workdir, REQUEST_FOLDER, "{0:016x}".format(address))
-    dump_file_name = os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address))
+    input_file_name = os.path.join(
+        workdir, REQUEST_FOLDER, "{0:016x}".format(address))
+    dump_file_name = os.path.join(
+        workdir, STATE_FOLDER, "{0:016x}".format(base_address))
     global MAPPED_PAGES
     if base_address not in MAPPED_PAGES.keys():
         if os.path.isfile(dump_file_name + REJECTED_ENDING):
@@ -259,10 +278,12 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
                     return
             except IOError:
                 pass
-            except Exception as e: #todo this shouldn't happen if we don't map like idiots
+            except Exception as e:  # todo this shouldn't happen if we don't map like idiots
                 print(e)
-                print("map_page_blocking failed: base address={0:016x}".format(base_address))
-                #exit(1)
+                print("map_page_blocking failed: base address={0:016x}".format(
+                    base_address))
+                # exit(1)
+
 
 def map_known_mem(uc, workdir=config.WORKDIR):
     for filename in os.listdir(os.path.join(workdir, STATE_FOLDER)):

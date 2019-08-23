@@ -1,9 +1,10 @@
 from unicorn.x86_const import *
 
-INSN_WRMSR = b'\x0f\x30' 
+INSN_WRMSR = b'\x0f\x30'
 
 MSR_FSBASE = 0xC0000100
 MSR_GSBASE = 0xC0000101
+
 
 def set_msr(uc, scratch, msr, val):
     '''
@@ -28,6 +29,7 @@ def set_msr(uc, scratch, msr, val):
     uc.reg_write(UC_X86_REG_RDX, ordx)
     uc.reg_write(UC_X86_REG_RCX, orcx)
     uc.reg_write(UC_X86_REG_RIP, orip)
+
 
 def get_msr(uc, scratch, msr):
     '''
@@ -56,6 +58,7 @@ def get_msr(uc, scratch, msr):
 
     return (edx << 32) | (eax & 0xFFFFFFFF)
 
+
 def set_gs_base(uc, scratch, val):
     '''
     Set the GS.base hidden descriptor-register field to the given address.
@@ -63,11 +66,13 @@ def set_gs_base(uc, scratch, val):
     '''
     return set_msr(uc, scratch, MSR_GSBASE, val)
 
+
 def get_gs_base(uc, scratch):
     '''
     fetch the GS.base hidden descriptor-register field.
     '''
     return get_msr(uc, scratch, MSR_GSBASE)
+
 
 def set_fs_base(uc, scratch, val):
     '''
@@ -76,15 +81,17 @@ def set_fs_base(uc, scratch, val):
     '''
     return set_msr(uc, scratch, MSR_FSBASE, val)
 
+
 def get_fs_base(uc, scratch):
     '''
     fetch the FS.base hidden descriptor-register field.
     '''
     return get_msr(uc, scratch, MSR_FSBASE)
 
+
 def init_syscall_hook(exits, abort_func):
-    def syscall_hook(uc, user_data): 
-        """ Syscalls rarely happen, so we use them as speedy-ish hook hack for additional exits. """ 
+    def syscall_hook(uc, user_data):
+        """ Syscalls rarely happen, so we use them as speedy-ish hook hack for additional exits. """
         address = uc.reg_read(UC_X86_REG_RIP)
         print("Run over at {0:x}".format(address))
         if address in exits:
@@ -95,4 +102,3 @@ def init_syscall_hook(exits, abort_func):
         # could add other hooks here
         print("No handler for syscall insn at {0:x}".format(address))
     return syscall_hook
-

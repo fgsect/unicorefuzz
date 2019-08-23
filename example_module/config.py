@@ -19,13 +19,13 @@ MODULE = "procfs1"
 BREAKOFFSET = 0x10
 
 # Or this to break at a fixed offset.
-BREAKADDR = None 
+BREAKADDR = None
 # You cannot set MODULE and BREAKOFFSET at the same time
 
 # Length of the function to fuzz (usually the return address)
 LENGTH = 0x19d - BREAKOFFSET
 
-# Additional exits here. 
+# Additional exits here.
 # The Exit at entry + LENGTH will be added automatically.
 EXITS = [
 ]
@@ -37,7 +37,7 @@ ENTRY_RELATIVE_EXITS = [
 WORKDIR = os.path.join(UNICORE_PATH, "unicore_workdir")
 
 
-def init_func(uc, rip): 
+def init_func(uc, rip):
     """
     An init function called before forking.
     This function may be used to set additional unicorn hooks and things.
@@ -61,20 +61,22 @@ def place_input_skb(uc, input):
 
     if len(input) > 1500:
         import os
-        os._exit(0) # too big!
+        os._exit(0)  # too big!
 
     # read input to the correct position at param rdx here:
     rdx = uc.reg_read(UC_X86_REG_RDX)
     rdi = uc.reg_read(UC_X86_REG_RDI)
-    utils.map_page_blocking(uc, rdx) # ensure sk_buf is mapped
-    bufferPtr = struct.unpack("<Q",uc.mem_read(rdx + 0xd8, 8))[0]
-    utils.map_page_blocking(uc, bufferPtr) # ensure the buffer is mapped
-    uc.mem_write(rdi, input) # insert afl input
-    uc.mem_write(rdx + 0xc4, b"\xdc\x05") # fix tail
+    utils.map_page_blocking(uc, rdx)  # ensure sk_buf is mapped
+    bufferPtr = struct.unpack("<Q", uc.mem_read(rdx + 0xd8, 8))[0]
+    utils.map_page_blocking(uc, bufferPtr)  # ensure the buffer is mapped
+    uc.mem_write(rdi, input)  # insert afl input
+    uc.mem_write(rdx + 0xc4, b"\xdc\x05")  # fix tail
+
 
 def place_input(uc, input):
     import utils
     from unicorn.x86_const import UC_X86_REG_RAX
     rax = uc.reg_read(UC_X86_REG_RAX)
-    utils.map_page_blocking(uc, rax) # make sure the parameter memory is mapped
-    uc.mem_write(rax, input) # insert afl input
+    # make sure the parameter memory is mapped
+    utils.map_page_blocking(uc, rax)
+    uc.mem_write(rax, input)  # insert afl input
