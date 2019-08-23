@@ -24,19 +24,26 @@ import x64utils
 
 import config
 
+try:
+    from uDdbg.utils import *
+except Exception as ex:
+    print("Error loading uDdbg: {}".format(ex))
+    print("Install using ./setupdebug.sh")
+
+
 X64 = X86_64
 # TODO:
 # Fix avatar2 x86 mode upstream
 # (ARM already contains unicorn_* and pc_name)
 X86.pc_name = UC_X86_REG_EIP
-X86.unicorn_arch = unicorn.UC_ARCH_X86
-X86.unicorn_mode = unicorn.UC_MODE_32
+X86.unicorn_arch = UC_ARCH_X86
+X86.unicorn_mode = UC_MODE_32
 X64.pc_name = UC_X86_REG_RIP
 # unicorn_arch is the same/inherited from X86
-X64.unicorn_mode = unicorn.UC_MODE_64
+X64.unicorn_mode = UC_MODE_64
 
-ARM.unicorn_consts = unicorn.arm_const
-X86.unicorn_consts = unicorn.x86_const
+ARM.unicorn_consts = arm_const
+X86.unicorn_consts = x86_const
 
 ARM.unicorn_reg_tag = "UC_ARM_REG_"
 ARM.ignored_regs = []
@@ -51,6 +58,9 @@ REJECTED_ENDING = ".rejected"
 
 MAPPED_PAGES = {}
 PAGE_SIZE = 0x1000
+
+_regs_name_cache = None
+
 
 SYSCALL_OPCODE = b'\x0f\x05'
 
@@ -79,9 +89,6 @@ def init_capstone(arch):
     if not hasattr(arch, "capstone"):
         arch.capstone = Cs(arch.capstone_arch, arch.capstone_mode)
     return arch.capstone
-
-
-_regs_name_cache = None
 
 
 def all_regs(arch=get_arch(config.ARCH)):
@@ -189,6 +196,7 @@ def set_exits(uc, base_address):
     Then, when we encounter a syscall, we figure out if a syscall or exit occurred.
     This can also be used to add additional hooks in the future.
     """
+    # TODO: This only works for X64!
     for end_addr in config.EXITS:
         if get_base(end_addr) == base_address:
             print("Setting exit {0:x}".format(end_addr))

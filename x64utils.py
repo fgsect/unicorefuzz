@@ -102,3 +102,11 @@ def init_syscall_hook(exits, abort_func):
         # could add other hooks here
         print("No handler for syscall insn at {0:x}".format(address))
     return syscall_hook
+
+
+def set_exit(uc, addr):
+    """
+    We use syscalls for this as unicorn offers hooks. 
+    Could also throw an UB2 instead and catch.
+    """
+    uc.mem_write(addr, SYSCALL_OPCODE)

@@ -100,8 +100,8 @@ def main(input_file, debug=False, trace=False):
         except:
             debug = False
             trace = True
-            print(
-                "[!] Could not load uDdbg (install with ./setupdebug.sh), falling back to trace output.")
+            raise Exception(
+                "[!] Could not load uDdbg (install with ./setupdebug.sh), falling back to trace output: {}".format(ex))
     if trace:
         print("[+] Settings trace hooks")
         uc.hook_add(UC_HOOK_BLOCK, unicorn_debug_block)
