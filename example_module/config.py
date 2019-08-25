@@ -37,7 +37,7 @@ ENTRY_RELATIVE_EXITS = [
 WORKDIR = os.path.join(UNICORE_PATH, "unicore_workdir")
 
 
-def init_func(uc, rip):
+def init_func(uc):
     """
     An init function called before forking.
     This function may be used to set additional unicorn hooks and things.

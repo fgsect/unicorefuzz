@@ -35,10 +35,10 @@ X64 = X86_64
 # TODO:
 # Fix avatar2 x86 mode upstream
 # (ARM already contains unicorn_* and pc_name)
-X86.pc_name = UC_X86_REG_EIP
+X86.pc_name = "eip"
 X86.unicorn_arch = UC_ARCH_X86
 X86.unicorn_mode = UC_MODE_32
-X64.pc_name = UC_X86_REG_RIP
+X64.pc_name = "rip"
 # unicorn_arch is the same/inherited from X86
 X64.unicorn_mode = UC_MODE_64
 
@@ -140,11 +140,17 @@ def uc_load_registers(uc, arch=get_arch(config.ARCH)):
             #print("[d] Faild to load reg: {} ({})".format(r, ex))
             pass
 
-    sys.stdout.flush()  # otherwise children will inherit the unflushed buffer
 
+def uc_start_forkserver(uc, arch=get_arch(config.ARCH)):
+    """
+    Starts the forkserver by executing an instruction on some scratch register
+    """
+
+    sys.stdout.flush()  # otherwise children will inherit the unflushed buffer
     scratch = config.SCRATCH_ADDR
     scratch_size = config.SCRATCH_SIZE
     uc.mem_map(config.SCRATCH_ADDR, config.SCRATCH_SIZE)
+
 
     if arch == X64:
         # prepare to do base register things

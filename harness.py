@@ -112,32 +112,38 @@ def main(input_file, debug=False, trace=False):
     # On error: map memory.
     uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access)
 
-    rip = utils.fetch_register("rip")
-
-    # if we only have a single exit, there is no need to potentially slow down execution with an insn hook.
-    if len(config.EXITS) or len(config.ENTRY_RELATIVE_EXITS):
-
-        # add MODULE_EXITS to EXITS
-        config.EXITS += [x + rip for x in config.ENTRY_RELATIVE_EXITS]
-        # add final exit to EXITS
-        config.EXITS.append(rip+config.LENGTH)
-
-        if arch == utils.X64:
-            exit_hook = x64utils.init_syscall_hook(config.EXITS, os._exit)
-            uc.hook_add(UC_HOOK_INSN, exit_hook, None,
-                        1, 0, UC_X86_INS_SYSCALL)
-        # TODO: Fast solution for X86, ARM, ...
-
     utils.map_known_mem(uc)
 
     if debug or trace:
         print("[*] Reading from file {}".format(input_file))
 
-    # last chance for a change!
-    config.init_func(uc, rip)
+    # we leave out gs_base and fs_base on x64 since they start the forkserver
+    utils.uc_load_registers(uc) 
 
-    # All done. Ready to fuzz.
-    utils.uc_load_registers(uc)  # starts the afl forkserver
+    # let's see if the user wants a change.
+    config.init_func(uc)
+
+    # get pc from unicorn state since init_func may have altered it.
+    pc = utils.uc_get_pc(uc, arch)
+
+    # if we only have a single exit, there is no need to potentially slow down execution with an insn hook.
+    if len(config.EXITS) or len(config.ENTRY_RELATIVE_EXITS):
+
+        # add MODULE_EXITS to EXITS
+        config.EXITS += [x + pc for x in config.ENTRY_RELATIVE_EXITS]
+        # add final exit to EXITS
+        config.EXITS.append(pc+config.LENGTH)
+
+        if arch == utils.X64:
+            exit_hook = x64utils.init_syscall_hook(config.EXITS, os._exit)
+            uc.hook_add(UC_HOOK_INSN, exit_hook, None,
+                        1, 0, UC_X86_INS_SYSCALL)
+        else:
+            # TODO: (Fast) solution for X86, ARM, ...
+            raise Exception("Multiple exits not yet suppored for arch {}".format(arch))
+    
+    # starts the afl forkserver
+    utils.uc_start_forkserver(uc) 
 
     input_file = open(input_file, 'rb')  # load afl's input
     input = input_file.read()
@@ -151,7 +157,7 @@ def main(input_file, debug=False, trace=False):
 
     if not debug:
         try:
-            uc.emu_start(rip, rip + config.LENGTH, timeout=0, count=0)
+            uc.emu_start(pc, pc + config.LENGTH, timeout=0, count=0)
         except UcError as e:
             print("[!] Execution failed with error: {} at address {:x}".format(
                 e, utils.uc_get_pc(uc, arch)))
@@ -163,7 +169,7 @@ def main(input_file, debug=False, trace=False):
         udbg = UnicornDbg()
 
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
-        udbg.initialize(emu_instance=uc, entry_point=rip, exit_point=rip+config.LENGTH,
+        udbg.initialize(emu_instance=uc, entry_point=pc, exit_point=pc+config.LENGTH,
                         hide_binary_loader=True, mappings=[(hex(x), x, utils.PAGE_SIZE) for x in utils.MAPPED_PAGES])
 
         def dbg_except(x, y):
