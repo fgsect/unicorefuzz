@@ -1,7 +1,7 @@
 # Unicorefuzz
 
 Fuzzing the Kernel using AFL Unicorn.
-For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf).
+For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf) or watch [this talk](https://github.com/fgsect/unicorefuzz).
 
 ## Unicorefuzz Setup
 * Install Python
@@ -95,3 +95,6 @@ Exits on X64 use `syscall`, which is a 2 bytes instruction.
 Using it to overwrite `ret` might break the line after the return instruction, since `ret` is only a single byte.
 Instead, consider hooking the op before ret.
 Exits on X86 and ARM are not yet supported. We'll get there :)
+
+### IO/Printthings
+It's generally a good idea to nop out kprintf or kernel printing functionality if possible, when the program is loaded into the emulator.
