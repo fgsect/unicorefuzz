@@ -1,7 +1,7 @@
 # Unicorefuzz
 
 Fuzzing the Kernel using AFL Unicorn.
-For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf) or watch [this talk](https://github.com/fgsect/unicorefuzz).
+For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf) or watch [this talk at CCCamp19](https://media.ccc.de/v/thms-32--emulate-fuzz-break-kernels).
 
 ## Unicorefuzz Setup
 * Install Python
