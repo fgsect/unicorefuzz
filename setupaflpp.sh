@@ -10,6 +10,7 @@ make || exit 1
 
 echo "[+] Building unicorn_mode"
 cd unicorn_mode || exit 1
+chmod +x ./build_unicorn_support.sh || exit 1
 ./build_unicorn_support.sh || exit 1
 
 echo "[*] To use AFL outside of unicorefuzz,"

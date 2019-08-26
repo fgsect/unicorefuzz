@@ -16,6 +16,7 @@ from avatar2.archs.arm import ARM, ARM_CORTEX_M3, ARMV7M, ARMBE
 from unicorn.x86_const import *
 from capstone import *
 from capstone.x86 import *
+from unicorn import *
 
 import struct
 import avatar2
