@@ -98,3 +98,19 @@ Exits on X86 and ARM are not yet supported. We'll get there :)
 
 ### IO/Printthings
 It's generally a good idea to nop out kprintf or kernel printing functionality if possible, when the program is loaded into the emulator.
+
+## Troubleshooting
+
+If you got trouble running unicorefuzz, follow these rulse, worst case feel free to reach out to us, for example to @domenuk on twitter.
+
+### No instrumentation
+
+You probably have a installation of unicorn without AFL instumentation. You might have installed it via `pip` at some point.
+Make sure when running `./harness.py`, the loaded `libunicorn.so` matches the one in the unicorn folder inside aflplusplus.
+A common issue may be running the wrong python version... AFL++ installs AFL Unicorn for the system python by default.
+Unicorefuzz should(tm) work inside a virtualenv, in case nothing else helps.
+
+### Stil won't start
+
+Run the harness without afl (`./harness.py -t ./sometestcase`).
+If this works but it still crashes in AFL, set `AFL_DEBUG_CHILD_OUTPUT=1` to see some harness output while fuzzing.
