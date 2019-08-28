@@ -1,1 +1,1 @@
-../unicorefuzz_cifs/config.py
+./example_module/config.py
