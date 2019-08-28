@@ -6,18 +6,19 @@ import sys
 import time
 import shutil
 import inotify.adapters
-from avatar2 import archs, Avatar, GDBTarget
+from datetime import datetime
 from sh import which
+from avatar2 import archs, Avatar, GDBTarget
 from utils import get_base, get_arch, all_regs, REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING
 
 GDB_PATH = which("gdb")
 
 
 def dump(workdir, target, base_address):
-    print("dumping addr=0x{0:016x}".format(base_address))
     mem = target.read_memory(base_address, 0x1000, raw=True)
-    with open(os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb") as f:
+    with open(os.path.join(workdir, STATE_FOLDER, "{:016x}".format(base_address)), "wb") as f:
         f.write(mem)
+    print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
 
 
 def forward_requests(target, workdir, requests_path, output_path):
@@ -26,7 +27,7 @@ def forward_requests(target, workdir, requests_path, output_path):
         for filename in filenames:
             base_address = get_base(int(filename, 16))
             try:
-                print("Reading {0:016x}".format(base_address))
+                print("[+] {}: Received request for {:016x}".format(datetime.now(), base_address))
                 if not os.path.isfile(os.path.join(output_path, str(base_address))):
                     dump(workdir, target, base_address)
                     # we should restart afl now
