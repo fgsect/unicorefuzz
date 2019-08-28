@@ -11,6 +11,7 @@ from unicorn import UC_HOOK_CODE
 from avatar2.archs import Architecture
 from avatar2.archs.x86 import X86, X86_64
 from avatar2.archs.arm import ARM, ARM_CORTEX_M3, ARMV7M, ARMBE
+
 # TODO: Add mips? ARM64? More archs?
 
 from unicorn.x86_const import *
@@ -63,7 +64,7 @@ PAGE_SIZE = 0x1000
 _regs_name_cache = None
 
 
-SYSCALL_OPCODE = b'\x0f\x05'
+SYSCALL_OPCODE = b"\x0f\x05"
 
 # TODO: arm64, mips, etc.
 archs = {
@@ -73,7 +74,7 @@ archs = {
     "arm": ARM,
     "arm_cortex_m3": ARM_CORTEX_M3,
     "arm_v7m": ARMV7M,
-    "armbe": ARMBE
+    "armbe": ARMBE,
 }
 
 
@@ -101,8 +102,11 @@ def all_regs(arch=get_arch(config.ARCH)):
         if isinstance(arch, str):
             arch = get_arch(arch)
         consts = arch.unicorn_consts
-        regs = [k.split("_REG_")[1].lower() for k, v in consts.__dict__.items() if
-                not k.startswith("__") and "_REG_" in k and not "INVALID" in k]
+        regs = [
+            k.split("_REG_")[1].lower()
+            for k, v in consts.__dict__.items()
+            if not k.startswith("__") and "_REG_" in k and not "INVALID" in k
+        ]
         if arch == X64:
             # These two are not directly supported by unicorn.
             regs += ["gs_base", "fs_base"]
@@ -133,12 +137,12 @@ def uc_load_registers(uc, arch=get_arch(config.ARCH)):
     regs = all_regs(arch)
     for r in regs:
         if r in arch.ignored_regs:
-            #print("[d] Ignoring reg: {} (Ignored)".format(r))
+            # print("[d] Ignoring reg: {} (Ignored)".format(r))
             continue
         try:
             uc.reg_write(uc_reg_const(arch, r), fetch_register(r))
         except Exception as ex:
-            #print("[d] Faild to load reg: {} ({})".format(r, ex))
+            # print("[d] Faild to load reg: {} ({})".format(r, ex))
             pass
 
 
@@ -152,7 +156,6 @@ def uc_start_forkserver(uc, arch=get_arch(config.ARCH)):
     scratch_size = config.SCRATCH_SIZE
     uc.mem_map(config.SCRATCH_ADDR, config.SCRATCH_SIZE)
 
-
     if arch == X64:
         # prepare to do base register things
         gs_base = fetch_register("gs_base")
@@ -160,9 +163,9 @@ def uc_start_forkserver(uc, arch=get_arch(config.ARCH)):
 
         # This will execute code -> starts afl-unicorn forkserver!
         x64utils.set_gs_base(uc, scratch, gs_base)
-        #print("[d] setting gs_base to "+hex(gs))
+        # print("[d] setting gs_base to "+hex(gs))
         x64utils.set_fs_base(uc, scratch, fs_base)
-        #print("[d] setting fs_base to "+hex(gs))
+        # print("[d] setting fs_base to "+hex(gs))
     else:
         # We still need to start the forkserver somehow to be consistent.
         # Let's emulate a nop for this.
@@ -215,10 +218,10 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
     Fetches a page at addr in the harness, asking probe_wrapper, if necessary.
     """
     base_address = get_base(address)
-    input_file_name = os.path.join(
-        workdir, REQUEST_FOLDER, "{0:016x}".format(address))
+    input_file_name = os.path.join(workdir, REQUEST_FOLDER, "{0:016x}".format(address))
     dump_file_name = os.path.join(
-        workdir, STATE_FOLDER, "{0:016x}".format(base_address))
+        workdir, STATE_FOLDER, "{0:016x}".format(base_address)
+    )
     global MAPPED_PAGES
     if base_address in MAPPED_PAGES.keys():
         return base_address, MAPPED_PAGES[base_address]
@@ -226,9 +229,9 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
         if os.path.isfile(dump_file_name + REJECTED_ENDING):
             # TODO: Exception class?
             raise Exception("Page can not be loaded from Target")
-            #os.kill(os.getpid(), signal.SIGSEGV)
+            # os.kill(os.getpid(), signal.SIGSEGV)
         if not os.path.isfile(dump_file_name):
-            open(input_file_name, 'a').close()
+            open(input_file_name, "a").close()
         print("mapping {}".format(hex(base_address)))
         while 1:
             try:
@@ -246,8 +249,11 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
                 pass
             except Exception as e:  # todo this shouldn't happen if we don't map like idiots
                 print(e)
-                print("map_page_blocking failed: base address={0:016x}".format(
-                    base_address))
+                print(
+                    "map_page_blocking failed: base address={0:016x}".format(
+                        base_address
+                    )
+                )
                 # exit(1)
 
 
@@ -264,17 +270,17 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
     Maps a page at addr in the harness, asking probe_wrapper.
     """
     base_address = get_base(address)
-    input_file_name = os.path.join(
-        workdir, REQUEST_FOLDER, "{0:016x}".format(address))
+    input_file_name = os.path.join(workdir, REQUEST_FOLDER, "{0:016x}".format(address))
     dump_file_name = os.path.join(
-        workdir, STATE_FOLDER, "{0:016x}".format(base_address))
+        workdir, STATE_FOLDER, "{0:016x}".format(base_address)
+    )
     global MAPPED_PAGES
     if base_address not in MAPPED_PAGES.keys():
         if os.path.isfile(dump_file_name + REJECTED_ENDING):
             print("CAN I HAZ EXPLOIT?")
             os.kill(os.getpid(), signal.SIGSEGV)
         if not os.path.isfile(dump_file_name):
-            open(input_file_name, 'a').close()
+            open(input_file_name, "a").close()
         print("mapping {}".format(hex(base_address)))
         while 1:
             try:
@@ -295,8 +301,11 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
                 pass
             except Exception as e:  # todo this shouldn't happen if we don't map like idiots
                 print(e)
-                print("map_page_blocking failed: base address={0:016x}".format(
-                    base_address))
+                print(
+                    "map_page_blocking failed: base address={0:016x}".format(
+                        base_address
+                    )
+                )
                 # exit(1)
 
 

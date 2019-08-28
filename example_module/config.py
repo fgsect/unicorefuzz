@@ -1,6 +1,7 @@
 # This is the main config file of Unicorefuzz.
 # It should be adapted for each fuzzing run.
 import os
+
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 # A place to put scratch memory to. Non-kernelspace address should be fine.
@@ -23,15 +24,13 @@ BREAKADDR = None
 # You cannot set MODULE and BREAKOFFSET at the same time
 
 # Length of the function to fuzz (usually the return address)
-LENGTH = 0x19d - BREAKOFFSET
+LENGTH = 0x19D - BREAKOFFSET
 
 # Additional exits here.
 # The Exit at entry + LENGTH will be added automatically.
-EXITS = [
-]
+EXITS = []
 # Exits realtive to the initial rip (entrypoint + addr)
-ENTRY_RELATIVE_EXITS = [
-]
+ENTRY_RELATIVE_EXITS = []
 
 # The location used to store data and logs
 WORKDIR = os.path.join(UNICORE_PATH, "unicore_workdir")
@@ -61,21 +60,23 @@ def place_input_skb(uc, input):
 
     if len(input) > 1500:
         import os
+
         os._exit(0)  # too big!
 
     # read input to the correct position at param rdx here:
     rdx = uc.reg_read(UC_X86_REG_RDX)
     rdi = uc.reg_read(UC_X86_REG_RDI)
     utils.map_page_blocking(uc, rdx)  # ensure sk_buf is mapped
-    bufferPtr = struct.unpack("<Q", uc.mem_read(rdx + 0xd8, 8))[0]
+    bufferPtr = struct.unpack("<Q", uc.mem_read(rdx + 0xD8, 8))[0]
     utils.map_page_blocking(uc, bufferPtr)  # ensure the buffer is mapped
     uc.mem_write(rdi, input)  # insert afl input
-    uc.mem_write(rdx + 0xc4, b"\xdc\x05")  # fix tail
+    uc.mem_write(rdx + 0xC4, b"\xdc\x05")  # fix tail
 
 
 def place_input(uc, input):
     import utils
     from unicorn.x86_const import UC_X86_REG_RAX
+
     rax = uc.reg_read(UC_X86_REG_RAX)
     # make sure the parameter memory is mapped
     utils.map_page_blocking(uc, rax)

@@ -9,14 +9,23 @@ import inotify.adapters
 from datetime import datetime
 from sh import which
 from avatar2 import archs, Avatar, GDBTarget
-from utils import get_base, get_arch, all_regs, REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING
+from utils import (
+    get_base,
+    get_arch,
+    all_regs,
+    REQUEST_FOLDER,
+    STATE_FOLDER,
+    REJECTED_ENDING,
+)
 
 GDB_PATH = which("gdb")
 
 
 def dump(workdir, target, base_address):
     mem = target.read_memory(base_address, 0x1000, raw=True)
-    with open(os.path.join(workdir, STATE_FOLDER, "{:016x}".format(base_address)), "wb") as f:
+    with open(
+        os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb"
+    ) as f:
         f.write(mem)
     print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
 
@@ -27,7 +36,11 @@ def forward_requests(target, workdir, requests_path, output_path):
         for filename in filenames:
             base_address = get_base(int(filename, 16))
             try:
-                print("[+] {}: Received request for {:016x}".format(datetime.now(), base_address))
+                print(
+                    "[+] {}: Received request for {:016x}".format(
+                        datetime.now(), base_address
+                    )
+                )
                 if not os.path.isfile(os.path.join(output_path, str(base_address))):
                     dump(workdir, target, base_address)
                     # we should restart afl now
@@ -35,20 +48,37 @@ def forward_requests(target, workdir, requests_path, output_path):
                 print("cya")
                 exit(0)
             except Exception as e:
-                print("Could not get memory region at {}: {} (Found mem corruption?)".format(
-                    hex(base_address), repr(e)))
-                with open(os.path.join(output_path, "{:016x}{}".format(base_address, REJECTED_ENDING)), 'a') as f:
+                print(
+                    "Could not get memory region at {}: {} (Found mem corruption?)".format(
+                        hex(base_address), repr(e)
+                    )
+                )
+                with open(
+                    os.path.join(
+                        output_path, "{:016x}{}".format(base_address, REJECTED_ENDING)
+                    ),
+                    "a",
+                ) as f:
                     f.write(repr(e))
             os.remove(os.path.join(requests_path, filename))
         filenames = os.listdir(requests_path)
 
 
-def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=True, arch="x64", gdb_port=1234):
+def main(
+    workdir,
+    module=None,
+    breakoffset=None,
+    breakaddress=None,
+    reset_state=True,
+    arch="x64",
+    gdb_port=1234,
+    gdb_host="localhost",
+):
     request_path = os.path.join(workdir, REQUEST_FOLDER)
     output_path = os.path.join(workdir, STATE_FOLDER)
 
     if arch != "x64":
-        raise("Unsupported arch")
+        raise ("Unsupported arch")
     if reset_state:
         try:
             shutil.rmtree(output_path)
@@ -61,25 +91,29 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
 
     if module:
         if breakaddress is not None:
-            raise("Breakaddress and module supplied. They are not compatible.")
+            raise ("Breakaddress and module supplied. They are not compatible.")
         if breakoffset is None:
-            raise("Module but no breakoffset specified. Don't know where to break.")
+            raise ("Module but no breakoffset specified. Don't know where to break.")
 
         mem_addr = os.popen("./get_mod_addr.sh " + module).readlines()
         try:
             mem_addr = int(mem_addr[0], 16)
         except ValueError as ex:
-            print("Error decoding module addr. Either module {} has not been loaded or something went wrong with ssh ({})".format(module, ex))
+            print(
+                "Error decoding module addr. Either module {} has not been loaded or something went wrong with ssh ({})".format(
+                    module, ex
+                )
+            )
             exit(-1)
         print("Module " + module + " is at memory address " + hex(mem_addr))
         breakaddress = hex(mem_addr + breakoffset)
     else:
         breakaddress = hex(breakaddress)
 
-    avatar = Avatar(arch=get_arch(arch),
-                    output_directory=os.path.join(workdir, "avatar"))
-    target = avatar.add_target(
-        GDBTarget, gdb_port=gdb_port, gdb_executable=GDB_PATH)
+    avatar = Avatar(
+        arch=get_arch(arch), output_directory=os.path.join(workdir, "avatar")
+    )
+    target = avatar.add_target(GDBTarget, gdb_port=gdb_port, gdb_executable=GDB_PATH)
     target.init()
 
     target.set_breakpoint("*{}".format(breakaddress))
@@ -102,10 +136,10 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
                     i32list = val
                     val = 0
                     for shift, i32 in enumerate(i32list):
-                        val += (i32 << (shift * 32))
+                        val += i32 << (shift * 32)
                 f.write(str(val))
             except Exception as ex:
-                #print("Ignoring {}: {}".format(reg, ex))
+                # print("Ignoring {}: {}".format(reg, ex))
                 written = False
         if not written:
             os.unlink(reg_file)
@@ -122,7 +156,7 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
     # only readily written files
     i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE)
     for event in i.event_gen(yield_nones=False):
-        #print("Request: ", event)
+        # print("Request: ", event)
         forward_requests(target, workdir, request_path, output_path)
 
     print("[*] Exiting probe_wrapper (keyboard interrupt)")
@@ -130,11 +164,12 @@ def main(workdir, module=None, breakoffset=None, breakaddress=None, reset_state=
 
 if __name__ == "__main__":
     import config
+
     main(
         module=config.MODULE,
         breakoffset=config.BREAKOFFSET,
         breakaddress=config.BREAKADDR,
         workdir=config.WORKDIR,
         arch=config.ARCH,
-        gdb_port=config.GDB_PORT
+        gdb_port=config.GDB_PORT,
     )
