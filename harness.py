@@ -101,7 +101,9 @@ def force_crash(uc_error):
         os.kill(os.getpid(), signal.SIGABRT)
 
 
-def main(input_file, debug=False, trace=False):
+def main(input_file, debug=False, trace=False, wait=False):
+    if wait:
+        utils.wait_for_probe_wrapper()
 
     arch = utils.get_arch(config.ARCH)
     uc = Uc(arch.unicorn_arch, arch.unicorn_mode)
@@ -234,6 +236,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Enables debug tracing",
     )
+    parser.add_argument(
+        "-w",
+        "--wait",
+        default=False,
+        action="store_true",
+        help="Wait for the state directory to be present",
+    )
     args = parser.parse_args()
 
-    main(args.input_file, debug=args.debug, trace=args.trace)
+    main(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
