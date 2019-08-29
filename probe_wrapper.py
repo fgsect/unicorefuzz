@@ -146,10 +146,9 @@ def main(
         if not written:
             os.unlink(reg_file)
 
-    try:
+    if not os.path.isdir(request_path):
+        print("[+] Creating request folder")
         os.mkdir(request_path)
-    except:
-        pass
 
     forward_requests(target, workdir, request_path, output_path)
     print("[*] Initial dump complete. Listening for requests from ./harness.py.")
