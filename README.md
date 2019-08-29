@@ -4,21 +4,20 @@ Fuzzing the Kernel using AFL Unicorn.
 For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf) or watch [this talk at CCCamp19](https://media.ccc.de/v/thms-32--emulate-fuzz-break-kernels).
 
 ## Unicorefuzz Setup
-* Install Python
-* Clone [afl++](https://github.com/vanhauser-thc/AFLplusplus) and follow instructions to install `./unicorn_mode` (or run `./setupaflpp.sh`)
-* `pip install -r requirements.txt`
+Unicorefuzz uses `python3`, however during the build process, it needs access to a working instance of `python2`, too.
+Run ./setup.sh, preferrably inside a VIRTUALENV (else python deps will be installed using `--user`).
+This will clone [afl++](https://github.com/vanhauser-thc/AFLplusplus) and install `./unicorn_mode`, clone [uDdbg](https://github.com/iGio90/uDdbg) and install deps as well as install the `requirements.txt`.
 
 ## Debug Kernel Setup (Skip this if you know how this works)
 
 * Create a qemu-img and install your preferred OS on there through qemu
 * An easy way to get a working userspace up and running in QEMU is to follow the steps described by syzkaller, namely [create-image.sh](https://github.com/google/syzkaller/blob/90c8f82ae8f12735e0e06d422dfea80758aaf0a5/tools/create-image.sh) 
-* For kernel customization you might want to clone your preferred kernel version and compile it on the host. This way you can also compile your own kernel modules (e.g. example_module).
+* For kernel customization you might want to clone your preferred kernel version and compile it on the host. This way you can also compile your own kernel modules (e.g. `example_module`).
 * In order to find out the address of a loaded module in the guest OS you can use `cat /proc/modules` to find out the base address of the module location. Use this as the offset for the function where you want to break. If you specify MODULE and BREAKOFFSET in the `config.py`, it should use `./get_mod_addr.sh` to start it automated.
 * You can compile the kernel with debug info. When you have compiled the linux kernel you can start gdb from the kernel folder with `gdb vmlinux`. After having loaded other modules you can use the `lx-symbols` command in gdb to load the symbols for the other modules (make sure the .ko files of the modules are in your kernel folder). This way you can just use something like `break function_to_break` to set breakpoints for the required functions.
-* In order to compile a custom kernel for Arch, download the current Arch kernel and set the .config to the Arch default. Then set `DEBUG_KERNEL=y`, `DEBUG_INFO=y`, `GDB_SCRIPTS=y` (for convenience), `KASAN=y`, `KASAN_EXTRA=y`. For convenience, we added a working [example_config](./example_config) that can be place to the linux dir.
+* In order to compile a custom kernel for Arch, download the current Arch kernel and set the .config to the Arch default. Then set `DEBUG_KERNEL=y`, `DEBUG_INFO=y`, `GDB_SCRIPTS=y` (for convenience), `KASAN=y`, `KASAN_EXTRA=y`. For convenience, we added a working [example\_config](./example_config) that can be place to the linux dir.
 * To only get necessary kernel modules boot the current system and execute `lsmod > mylsmod` and copy the mylsmod file to your host system into the linux kernel folder that you downloaded. Then you can use `make LSMOD=mylsmod localmodconfig` to only make the kernel modules that are actually needed by the guest system. Then you can compile the kernel like normal with `make`. Then mount the guest file system to `/mnt` and use `make modules_install INSTALL_MOD_PATH=/mnt`. At last you have to create a new initramfs, which apparently has to be done on the guest system. Here use `mkinitcpio -k <folder in /lib/modules/...> -g <where to put initramfs>`. Then you just need to copy that back to the host and let qemu know where your kernel and the initramfs are located.
 * Setting breakpoints anywhere else is possible. For this, set `BREAKADDR` in the `config.py` instead.
-* If you want fancy debugging, install [uDdbg](https://github.com/iGio90/uDdbg) with `./setupdebug.sh`
 * Before fuzzing, run `sudo ./setaflops.sh` to initialize your system for fuzzing.
 
 ## Run
@@ -63,8 +62,9 @@ This makes it easier to interact with it.
 
 ## Debugging
 You can step through the code, starting at the breakpoint, with any given input.
-To do so, run `./harness.py -d $inputfile`.
-Possible inputs to the harness:
+The fancy debugging makes use of [uDdbg](https://github.com/iGio90/uDdbg).
+To use it, run `./harness.py -d $inputfile`.
+Possible inputs to the harness (the thing wrapping afl-unicorn) that help debugging:
 
 `-d` flag starts the unicorn debugger ([uDdbg](https://github.com/iGio90/uDdbg)) that has to be installed using `./setupdebug.sh` first.
 `-t` flag enables the afl-unicorn tracer. It prints every emulated instruction, as well as displays memory accesses.
