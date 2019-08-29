@@ -113,7 +113,9 @@ def main(
     avatar = Avatar(
         arch=get_arch(arch), output_directory=os.path.join(workdir, "avatar")
     )
-    target = avatar.add_target(GDBTarget, gdb_port=gdb_port, gdb_executable=GDB_PATH)
+    target = avatar.add_target(
+        GDBTarget, gdb_ip=gdb_host, gdb_port=gdb_port, gdb_executable=GDB_PATH
+    )
     target.init()
 
     target.set_breakpoint("*{}".format(breakaddress))
@@ -172,4 +174,5 @@ if __name__ == "__main__":
         workdir=config.WORKDIR,
         arch=config.ARCH,
         gdb_port=config.GDB_PORT,
+        gdb_host=config.GDB_HOST,
     )
