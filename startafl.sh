@@ -1,5 +1,7 @@
 #!/bin/bash
 export PATH=./AFLplusplus:$PATH
+# Make sure we instrument comparisons
+export AFL_COMPCOV_LEVEL=2
 
 python3 -c 'import utils; utils.wait_for_probe_wrapper()'
 
