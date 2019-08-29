@@ -317,3 +317,9 @@ def map_known_mem(uc, workdir=config.WORKDIR):
                 map_page_blocking(uc, address)
             except:
                 pass
+
+
+def wait_for_probe_wrapper():
+    while not os.path.exists(os.path.join(config.WORKDIR, REQUEST_FOLDER)):
+        print("[.] Waiting for probewrapper to be available...")
+        time.sleep(5)
