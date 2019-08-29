@@ -3,6 +3,10 @@
 Fuzzing the Kernel using AFL Unicorn.
 For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf) or watch [this talk at CCCamp19](https://media.ccc.de/v/thms-32--emulate-fuzz-break-kernels).
 
+## Is it any good?
+
+[yes](https://news.ycombinator.com/item?id=3067434).
+
 ## Unicorefuzz Setup
 * Install Python
 * Clone [afl++](https://github.com/vanhauser-thc/AFLplusplus) and follow instructions to install `./unicorn_mode` (or run `./setupaflpp.sh`)
