@@ -10,4 +10,4 @@ install:
   - docker build -t unicorefuzz .
 
 script:
-  - black --check .
+  - black --check --diff .
