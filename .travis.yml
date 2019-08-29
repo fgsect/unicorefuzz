@@ -1,0 +1,7 @@
+language: python
+
+services:
+  - docker
+
+install:
+  - docker build -t unicorefuzz .
