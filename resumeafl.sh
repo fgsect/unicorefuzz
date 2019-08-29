@@ -1,5 +1,7 @@
 #!/bin/bash
 export PATH=./AFLplusplus:$PATH
+# Make sure we instrument comparisons
+export AFL_COMPCOV_LEVEL=2
 if [ -z "$1" ]; then
 	echo "[*] Unicorefuzz running AFL master node. Supply an id to spawn additional workers."
 	afl-fuzz -U -m none -i - -o afl_outputs -t 4000+ -M master -- python harness.py @@ || exit 1
