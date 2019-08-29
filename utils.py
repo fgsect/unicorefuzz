@@ -53,6 +53,7 @@ ARM.insn_nop = b"\x00\x00\x00\x00"
 X86.unicorn_reg_tag = "UC_X86_REG_"
 X86.ignored_regs = ["cr0"]  # CR0 unicorn crash
 X86.insn_nop = b"\x90"
+X64.ignored_regs = X86.ignored_regs + ["fs", "gs"]  # crashes unicorn too
 
 REQUEST_FOLDER = "requests"
 STATE_FOLDER = "state"
