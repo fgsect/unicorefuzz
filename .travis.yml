@@ -3,5 +3,11 @@ language: python
 services:
   - docker
 
+before_install:
+  - pip install black
+
 install:
   - docker build -t unicorefuzz .
+
+script:
+  - black --check .
