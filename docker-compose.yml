@@ -1,0 +1,46 @@
+version: "3.7"
+services:
+  probe_wrapper:
+    build: .
+    image: unicorefuzz:latest
+    entrypoint: ['python3', './probe_wrapper.py']
+    volumes:
+      - type: volume
+        source: unicorefuzz
+        target: /unicorefuzz/unicore_workdir
+      - type: bind
+        source: ./config.py
+        target: /unicorefuzz/config.py
+  afl:
+    build: .
+    image: unicorefuzz:latest
+    entrypoint: ['./startafl.sh']
+    volumes:
+      - type: volume
+        source: unicorefuzz
+        target: /unicorefuzz/unicore_workdir
+      - type: bind
+        source: ./config.py
+        target: /unicorefuzz/config.py
+      - type: bind
+        source: ./afl_inputs
+        target: /unicorefuzz/afl_inputs
+      - type: bind
+        source: ./afl_outputs
+        target: /unicorefuzz/afl_outputs
+  # harness:
+  #   build: .
+  #   image: unicorefuzz:latest
+  #   entrypoint: ['python3', './harness.py', '--wait', '-t', 'testcase']
+  #   volumes:
+  #     - type: volume
+  #       source: unicorefuzz
+  #       target: /unicorefuzz/unicore_workdir
+  #     - type: bind
+  #       source: ./config.py
+  #       target: /unicorefuzz/config.py
+  #     - type: bind
+  #       source: ./testcase
+  #       target: /unicorefuzz/testcase
+volumes:
+  unicorefuzz:
