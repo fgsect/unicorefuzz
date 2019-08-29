@@ -1,5 +1,9 @@
 # Unicorefuzz
 
+![Travis (.org)](https://img.shields.io/travis/fgsect/unicorefuzz)
+![code-style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
+
+
 Fuzzing the Kernel using AFL Unicorn.
 For details, skim through [the WOOT paper](https://www.usenix.org/system/files/woot19-paper_maier.pdf) or watch [this talk at CCCamp19](https://media.ccc.de/v/thms-32--emulate-fuzz-break-kernels).
 

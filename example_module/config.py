@@ -13,7 +13,7 @@ SCRATCH_SIZE = 0x1000
 ARCH = "x64"
 
 # The gdb port to connect to
-GDB_HOST = 'localhost'
+GDB_HOST = "localhost"
 GDB_PORT = 1234
 
 # Either set this to load the module from the VM and break at module + offset...
