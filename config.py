@@ -1,1 +1,1 @@
-./example_module/config.py
+../unicorefuzz_asn1/config.py
