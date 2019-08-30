@@ -1,6 +1,9 @@
 # This is the main config file of Unicorefuzz.
 # It should be adapted for each fuzzing run.
 import os
+import utils
+from unicorn.x86_const import UC_X86_REG_RAX
+
 
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -75,9 +78,6 @@ def place_input_skb(uc, input):
 
 
 def place_input(uc, input):
-    import utils
-    from unicorn.x86_const import UC_X86_REG_RAX
-
     rax = uc.reg_read(UC_X86_REG_RAX)
     # make sure the parameter memory is mapped
     utils.map_page_blocking(uc, rax)
