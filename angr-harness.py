@@ -102,6 +102,7 @@ def main(input_file):
 
     return
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Angr-Harness for unicorefuzz")
     parser.add_argument(
