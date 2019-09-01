@@ -11,6 +11,8 @@ For details, skim through [the WOOT paper](https://www.usenix.org/system/files/w
 
 [yes](https://news.ycombinator.com/item?id=3067434).
 
+![AFL Screenshot](unicorefuzzing.png)
+
 ## Unicorefuzz Setup
 * Install Python
 * Clone [afl++](https://github.com/vanhauser-thc/AFLplusplus) and follow instructions to install `./unicorn_mode` (or run `./setupaflpp.sh`)
