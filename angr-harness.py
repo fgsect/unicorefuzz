@@ -33,7 +33,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
         for r in simgr.errored:
             s = r.state
             if isinstance(
-                r.error, angr.errors.SimEngineError
+                    r.error, angr.errors.SimEngineError
             ) and "No bytes in memory" in repr(r.error):
                 addr = s.solver.eval_one(s.regs.rip)
             elif isinstance(r.error, angr.errors.SimSegfaultException):
@@ -58,7 +58,6 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
 
 
 def main(input_file):
-
     rip = utils.fetch_register("rip")
     pageaddr, pagecontent = utils.fetch_page_blocking(rip)
     pagepath = utils.path_for_page(pageaddr)
@@ -83,6 +82,7 @@ def main(input_file):
     state.memory.store(pageaddr, content)
 
     input_file = open(input_file, "rb")  # load afl's input
+
     input = input_file.read()
     input_file.close()
 
@@ -102,7 +102,6 @@ def main(input_file):
         simgr.step()
 
     return
-    # Below is legacy code..
 
 
 if __name__ == "__main__":
