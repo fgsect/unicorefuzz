@@ -1,6 +1,6 @@
 # Unicorefuzz
 
-![Travis (.org)](https://img.shields.io/travis/fgsect/unicorefuzz)
+[![Build Status](https://travis-ci.com/fgsect/unicorefuzz.svg?branch=master)](https://travis-ci.com/fgsect/unicorefuzz)
 ![code-style: black](https://img.shields.io/badge/code%20style-black-000000.svg)
 
 
