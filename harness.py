@@ -201,7 +201,7 @@ def main(input_file, debug=False, trace=False, wait=False):
             entry_point=pc,
             exit_point=pc + config.LENGTH,
             hide_binary_loader=True,
-            mappings=[(hex(x), x, utils.PAGE_SIZE) for x in utils.MAPPED_PAGES],
+            mappings=[(hex(x), x, utils.PAGE_SIZE) for x in utils._mapped_page_cache],
         )
 
         def dbg_except(x, y):

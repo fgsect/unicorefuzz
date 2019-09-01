@@ -59,13 +59,11 @@ REQUEST_FOLDER = "requests"
 STATE_FOLDER = "state"
 REJECTED_ENDING = ".rejected"
 
-MAPPED_PAGES = {}
 PAGE_SIZE = 0x1000
 
+_mapped_page_cache = {}
 _regs_name_cache = None
 
-
-SYSCALL_OPCODE = b"\x0f\x05"
 
 # TODO: arm64, mips, etc.
 archs = {
@@ -211,7 +209,7 @@ def set_exits(uc, base_address):
     for end_addr in config.EXITS:
         if get_base(end_addr) == base_address:
             print("Setting exit {0:x}".format(end_addr))
-            uc.mem_write(end_addr, SYSCALL_OPCODE)
+            uc.mem_write(end_addr, x64utils.SYSCALL_OPCODE)
 
 
 def fetch_page_blocking(address, workdir=config.WORKDIR):
@@ -224,9 +222,9 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
     dump_file_name = os.path.join(
         workdir, STATE_FOLDER, "{0:016x}".format(base_address)
     )
-    global MAPPED_PAGES
-    if base_address in MAPPED_PAGES.keys():
-        return base_address, MAPPED_PAGES[base_address]
+    global _mapped_page_cache
+    if base_address in _mapped_page_cache.keys():
+        return base_address, _mapped_page_cache[base_address]
     else:
         if os.path.isfile(dump_file_name + REJECTED_ENDING):
             # TODO: Exception class?
@@ -245,7 +243,7 @@ def fetch_page_blocking(address, workdir=config.WORKDIR):
                     if len(content) < PAGE_SIZE:
                         time.sleep(0.001)
                         continue
-                    MAPPED_PAGES[base_address] = content
+                    _mapped_page_cache[base_address] = content
                     return base_address, content
             except IOError:
                 pass
@@ -276,8 +274,8 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
     dump_file_name = os.path.join(
         workdir, STATE_FOLDER, "{0:016x}".format(base_address)
     )
-    global MAPPED_PAGES
-    if base_address not in MAPPED_PAGES.keys():
+    global _mapped_page_cache
+    if base_address not in _mapped_page_cache.keys():
         if os.path.isfile(dump_file_name + REJECTED_ENDING):
             print("CAN I HAZ EXPLOIT?")
             os.kill(os.getpid(), signal.SIGSEGV)
@@ -296,7 +294,7 @@ def map_page_blocking(uc, address, workdir=config.WORKDIR):
                         continue
                     uc.mem_map(base_address, len(content))
                     uc.mem_write(base_address, content)
-                    MAPPED_PAGES[base_address] = content
+                    _mapped_page_cache[base_address] = content
                     set_exits(uc, base_address)
                     return
             except IOError:

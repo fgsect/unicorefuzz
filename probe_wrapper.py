@@ -78,7 +78,7 @@ def main(
     output_path = os.path.join(workdir, STATE_FOLDER)
 
     if arch != "x64":
-        raise ("Unsupported arch")
+        raise Exception("Unsupported arch")
     if reset_state:
         try:
             shutil.rmtree(output_path)

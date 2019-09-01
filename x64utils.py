@@ -5,6 +5,8 @@ INSN_WRMSR = b"\x0f\x30"
 MSR_FSBASE = 0xC0000100
 MSR_GSBASE = 0xC0000101
 
+SYSCALL_OPCODE = b"\x0f\x05"
+
 
 def set_msr(uc, scratch, msr, val):
     """

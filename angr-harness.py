@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import angr
+import claripy
 import argparse
 import os
 import signal
@@ -33,7 +34,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
         for r in simgr.errored:
             s = r.state
             if isinstance(
-                    r.error, angr.errors.SimEngineError
+                r.error, angr.errors.SimEngineError
             ) and "No bytes in memory" in repr(r.error):
                 addr = s.solver.eval_one(s.regs.rip)
             elif isinstance(r.error, angr.errors.SimSegfaultException):
@@ -85,8 +86,6 @@ def main(input_file):
     input = input_file.read()
     input_file.close()
 
-    import claripy
-
     input_symbolic = claripy.BVS("input", len(input) * 8)
 
     state.preconstrainer.preconstrain(input, input_symbolic)
@@ -96,6 +95,7 @@ def main(input_file):
 
     simgr = p.factory.simulation_manager(state)
     simgr.use_technique(PageForwardingExplorer())
+    simgr.use_technique(angr.exploration_techniques.DFS())
     while simgr.active:
         print(simgr)
         simgr.step()
