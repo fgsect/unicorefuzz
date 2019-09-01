@@ -88,7 +88,7 @@ def get_arch(archname):
     return archs[archname.lower()]
 
 
-def init_capstone(arch):
+def init_capstone(arch=get_arch(config.ARCH)):
     if not hasattr(arch, "capstone"):
         arch.capstone = Cs(arch.capstone_arch, arch.capstone_mode)
     return arch.capstone
@@ -217,6 +217,7 @@ def set_exits(uc, base_address):
 def fetch_page_blocking(address, workdir=config.WORKDIR):
     """
     Fetches a page at addr in the harness, asking probe_wrapper, if necessary.
+    returns base_address, content
     """
     base_address = get_base(address)
     input_file_name = os.path.join(workdir, REQUEST_FOLDER, "{0:016x}".format(address))

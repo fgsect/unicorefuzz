@@ -117,7 +117,7 @@ def main(input_file, debug=False, trace=False, wait=False):
             from udbg import UnicornDbg
 
             print("[+] uDdbg debugger loaded.")
-        except:
+        except Exception as ex:
             debug = False
             trace = True
             raise Exception(
