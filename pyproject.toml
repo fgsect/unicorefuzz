@@ -1,4 +1,5 @@
 [tool.black]
 exclude = '''
 AFLplusplus/
+)
 '''
