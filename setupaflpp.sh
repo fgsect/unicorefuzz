@@ -12,6 +12,7 @@ echo "[+] Building unicorn_mode"
 cd unicorn_mode || exit 1
 chmod +x ./build_unicorn_support.sh || exit 1
 ./build_unicorn_support.sh || exit 1
+( cd unicorn/bindings/python && python3 setup.py install )
 
 echo "[*] To use AFL outside of unicorefuzz,"
 echo '    export PATH=$PATH' ":$(pwd)/AFLplusplus"
