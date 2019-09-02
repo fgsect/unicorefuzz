@@ -3,21 +3,8 @@
 import angr
 import claripy
 import argparse
-import os
-import signal
-import sys
-import json
-import time
-import struct
 
-from unicorn import *
-from unicorn.x86_const import *
-from capstone import *
-from capstone.x86 import *
-
-import utils
-
-import config
+from unicorefuzz import utils
 
 cs = utils.init_capstone()
 

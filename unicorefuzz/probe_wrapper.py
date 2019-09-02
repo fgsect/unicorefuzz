@@ -1,22 +1,16 @@
 #!/usr/bin/env python3
 import os
-import socket
-import re
-import sys
-import time
 import shutil
 import inotify.adapters
 from datetime import datetime
 from sh import which
-from avatar2 import archs, Avatar, GDBTarget
-from utils import (
+from avatar2 import Avatar, GDBTarget
+from unicorefuzz.utils import (
     get_base,
     get_arch,
     all_regs,
-    REQUEST_FOLDER,
-    STATE_FOLDER,
-    REJECTED_ENDING,
 )
+from unicorefuzz.unicorefuzz import REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING
 
 GDB_PATH = which("gdb")
 
@@ -64,7 +58,7 @@ def forward_requests(target, workdir, requests_path, output_path):
         filenames = os.listdir(requests_path)
 
 
-def main(
+def wrap_gdb_target(
     workdir,
     module=None,
     breakoffset=None,
@@ -164,9 +158,9 @@ def main(
 
 
 if __name__ == "__main__":
-    import config
+    from unicorefuzz import config
 
-    main(
+    wrap_gdb_target(
         module=config.MODULE,
         breakoffset=config.BREAKOFFSET,
         breakaddress=config.BREAKADDR,

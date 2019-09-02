@@ -3,102 +3,16 @@ import argparse
 import os
 import signal
 import sys
-import json
-import time
-import struct
 
 from unicorn import *
 from unicorn.x86_const import *
-from capstone import *
-from capstone.x86 import *
 
-import utils
-import x64utils
+import unicorefuzz.unicorefuzz
+from unicorefuzz import utils, x64utils
 
 import config
 
 cs = utils.init_capstone(utils.get_arch(config.ARCH))
-
-
-def unicorn_debug_instruction(uc, address, size, user_data):
-    try:
-        mem = uc.mem_read(address, size)
-        for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(mem), size
-        ):
-            print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
-    except Exception as e:
-        print(hex(address))
-        print("e: {}".format(e))
-        print("size={}".format(size))
-        for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(uc.mem_read(address, 30)), 30
-        ):
-            print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
-
-
-def unicorn_debug_block(uc, address, size, user_data):
-    print("Basic Block: addr=0x{0:016x}, size=0x{1:016x}".format(address, size))
-
-
-def unicorn_debug_mem_access(uc, access, address, size, value, user_data):
-    if access == UC_MEM_WRITE:
-        print(
-            "        >>> Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(
-                address, size, value
-            )
-        )
-    else:
-        print("        >>> Read: addr=0x{0:016x} size={1}".format(address, size))
-
-
-def unicorn_debug_mem_invalid_access(uc, access, address, size, value, user_data):
-    print(
-        "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={})".format(
-            uc, access, address, size, value, user_data
-        )
-    )
-    if access == UC_MEM_WRITE_UNMAPPED:
-        print(
-            "        >>> INVALID Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(
-                address, size, value
-            )
-        )
-    else:
-        print(
-            "        >>> INVALID Read: addr=0x{0:016x} size={1}".format(address, size)
-        )
-    try:
-        utils.map_page_blocking(uc, address)
-    except KeyboardInterrupt:
-        uc.emu_stop()
-        return False
-    return True
-
-
-def force_crash(uc_error):
-    # This function should be called to indicate to AFL that a crash occurred during emulation.
-    # Pass in the exception received from Uc.emu_start()
-    mem_errors = [
-        UC_ERR_READ_UNMAPPED,
-        UC_ERR_READ_PROT,
-        UC_ERR_READ_UNALIGNED,
-        UC_ERR_WRITE_UNMAPPED,
-        UC_ERR_WRITE_PROT,
-        UC_ERR_WRITE_UNALIGNED,
-        UC_ERR_FETCH_UNMAPPED,
-        UC_ERR_FETCH_PROT,
-        UC_ERR_FETCH_UNALIGNED,
-    ]
-    if uc_error.errno in mem_errors:
-        # Memory error - throw SIGSEGV
-        os.kill(os.getpid(), signal.SIGSEGV)
-    elif uc_error.errno == UC_ERR_INSN_INVALID:
-        # Invalid instruction - throw SIGILL
-        os.kill(os.getpid(), signal.SIGILL)
-    else:
-        # Not sure what happened - throw SIGABRT
-        os.kill(os.getpid(), signal.SIGABRT)
 
 
 def main(input_file, debug=False, trace=False, wait=False):
@@ -159,7 +73,7 @@ def main(input_file, debug=False, trace=False, wait=False):
         # add final exit to EXITS
         config.EXITS.append(pc + config.LENGTH)
 
-        if arch == utils.X64:
+        if arch == unicorefuzz.unicorefuzz.X64:
             exit_hook = x64utils.init_syscall_hook(config.EXITS, os._exit)
             uc.hook_add(UC_HOOK_INSN, exit_hook, None, 1, 0, UC_X86_INS_SYSCALL)
         else:
@@ -201,7 +115,8 @@ def main(input_file, debug=False, trace=False, wait=False):
             entry_point=pc,
             exit_point=pc + config.LENGTH,
             hide_binary_loader=True,
-            mappings=[(hex(x), x, utils.PAGE_SIZE) for x in utils._mapped_page_cache],
+            mappings=[(hex(x), x, unicorefuzz.unicorefuzz.PAGE_SIZE) for x in
+                      unicorefuzz.unicorefuzz._mapped_page_cache],
         )
 
         def dbg_except(x, y):

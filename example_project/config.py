@@ -1,9 +1,11 @@
 # This is the main config file of Unicorefuzz.
 # It should be adapted for each fuzzing run.
 import os
-import utils
-from unicorn.x86_const import UC_X86_REG_RAX
+import struct
 
+from unicorn.x86_const import UC_X86_REG_RAX, UC_X86_REG_RDX, UC_X86_REG_RDI
+
+from unicorefuzz import utils
 
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -11,6 +13,9 @@ UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 SCRATCH_ADDR = 0x80000
 # How much scratch to add. We don't ask for much. Default should be fine.
 SCRATCH_SIZE = 0x1000
+
+# The page size used by the emulator. Optional.
+PAGE_SIZE = 0x1000
 
 # Set a supported architecture
 ARCH = "x64"
@@ -37,7 +42,15 @@ EXITS = []
 ENTRY_RELATIVE_EXITS = []
 
 # The location used to store data and logs
-WORKDIR = os.path.join(UNICORE_PATH, "unicore_workdir")
+WORKDIR = os.path.join(os.getcwd(), "unicore_workdir")
+
+# Where AFL input should be read from
+AFL_INPUT = os.path.join(os.getcwd(), "afl_input")
+# Where AFL output should be placed at
+AFL_OUTPUT = os.path.join(os.getcwd(), "afl_output")
+
+# Optional AFL dictionary
+AFL_DICT = None
 
 
 def init_func(uc):
@@ -58,9 +71,6 @@ def place_input_skb(uc, input):
     Places the input in memory and alters the input.
     This is an example for sk_buff in openvsswitch
     """
-    import utils
-    import struct
-    from unicorn.x86_const import UC_X86_REG_RDX, UC_X86_REG_RDI
 
     if len(input) > 1500:
         import os

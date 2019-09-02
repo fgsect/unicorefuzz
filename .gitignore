@@ -27,6 +27,6 @@ modules.order
 core.*
 debootstrap
 unicore_workdir
-uDdbg
+unicorefuzz/uDdbg
 .fuse*
-AFLplusplus
+unicorefuzz/AFLplusplus
