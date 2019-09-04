@@ -1,0 +1,6 @@
+[submodule "uDdbg"]
+	path = uDdbg
+	url = https://github.com/iGio90/uDdbg.git
+[submodule "AFLplusplus"]
+	path = AFLplusplus
+	url = https://github.com/vanhauser-thc/AFLplusplus.git

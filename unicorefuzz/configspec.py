@@ -1,3 +1,8 @@
+"""
+File for reading in and validating the config.
+The actual spec can be found a few lines below.
+Lots of Required and Optional things.
+"""
 import collections
 import inspect
 import os
@@ -232,7 +237,7 @@ def type_matches(val, expected_type):
                 if not type_matches(key, expected_type.__args__[0]):
                     return False
             for value in val.values():
-                if not type_matches(key, expected_type.__args__[1]):
+                if not type_matches(value, expected_type.__args__[1]):
                     return False
             return True
         elif expected_type.__origin__ == list:
@@ -338,10 +343,12 @@ def apply_spec(module, spec, print_info=True):
     """
     errors = []
     if print_info:
+
         def print_maybe(*args):
             print(*args)
 
     else:
+
         def print_maybe(*args):
             pass
 

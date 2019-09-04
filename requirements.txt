@@ -3,3 +3,4 @@ capstone
 unicorn
 sh
 inotify
+angr

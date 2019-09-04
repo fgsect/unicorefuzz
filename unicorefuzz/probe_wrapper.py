@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 import os
 import shutil
+import sys
+
 import inotify.adapters
 from datetime import datetime
 from sh import which
 from avatar2 import Avatar, GDBTarget
-from unicorefuzz.utils import (
-    get_base,
-    get_arch,
-    all_regs,
-)
-from unicorefuzz.unicorefuzz import REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING
+
+from unicorefuzz.configspec import load_config
+from unicorefuzz.utils import get_base
+from unicorefuzz.unicorefuzz import REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING, get_arch
 
 GDB_PATH = which("gdb")
 
@@ -18,7 +18,7 @@ GDB_PATH = which("gdb")
 def dump(workdir, target, base_address):
     mem = target.read_memory(base_address, 0x1000, raw=True)
     with open(
-        os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb"
+            os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb"
     ) as f:
         f.write(mem)
     print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
@@ -48,10 +48,10 @@ def forward_requests(target, workdir, requests_path, output_path):
                     )
                 )
                 with open(
-                    os.path.join(
-                        output_path, "{:016x}{}".format(base_address, REJECTED_ENDING)
-                    ),
-                    "a",
+                        os.path.join(
+                            output_path, "{:016x}{}".format(base_address, REJECTED_ENDING)
+                        ),
+                        "a",
                 ) as f:
                     f.write(repr(e))
             os.remove(os.path.join(requests_path, filename))
@@ -59,14 +59,14 @@ def forward_requests(target, workdir, requests_path, output_path):
 
 
 def wrap_gdb_target(
-    workdir,
-    module=None,
-    breakoffset=None,
-    breakaddress=None,
-    reset_state=True,
-    arch="x64",
-    gdb_port=1234,
-    gdb_host="localhost",
+        workdir,
+        module=None,
+        breakoffset=None,
+        breakaddress=None,
+        reset_state=True,
+        arch="x64",
+        gdb_port=1234,
+        gdb_host="localhost",
 ):
     request_path = os.path.join(workdir, REQUEST_FOLDER)
     output_path = os.path.join(workdir, STATE_FOLDER)
@@ -85,9 +85,9 @@ def wrap_gdb_target(
 
     if module:
         if breakaddress is not None:
-            raise ("Breakaddress and module supplied. They are not compatible.")
+            raise ValueError("Breakaddress and module supplied. They are not compatible.")
         if breakoffset is None:
-            raise ("Module but no breakoffset specified. Don't know where to break.")
+            raise ValueError("Module but no breakoffset specified. Don't know where to break.")
 
         mem_addr = os.popen("./get_mod_addr.sh " + module).readlines()
         try:
@@ -121,7 +121,7 @@ def wrap_gdb_target(
     print("[+] hit! dumping registers and memory")
 
     # dump registers
-    for reg in all_regs(get_arch(arch)):
+    for reg in get_arch(arch).reg_names:
         written = True
         reg_file = os.path.join(output_path, reg)
         with open(reg_file, "w") as f:
@@ -158,7 +158,15 @@ def wrap_gdb_target(
 
 
 if __name__ == "__main__":
-    from unicorefuzz import config
+    if len(sys.argv) == 2:
+        config_path = sys.argv[1]
+        if sys.argv[1] == "-h" or sys.argv[1] == "--help":
+            raise Exception("Probe wrapper for Unicorefuz.\nOnly expected (optional) parameter: config.py")
+    elif len(sys.argv) > 2:
+        raise Exception("Too many arguments. Only expected (optional) parameter: config.py")
+    else:
+        config_path = os.getcwd()
+    config = load_config(config_path)
 
     wrap_gdb_target(
         module=config.MODULE,

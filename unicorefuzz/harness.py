@@ -8,9 +8,15 @@ from unicorn import *
 from unicorn.x86_const import *
 
 import unicorefuzz.unicorefuzz
+from unicorefuzz.unicorefuzz import Unicorefuzz
 from unicorefuzz import utils, x64utils
 
-import config
+
+class Harness(Unicorefuzz):
+    pass
+
+
+
 
 cs = utils.init_capstone(utils.get_arch(config.ARCH))
 
@@ -27,18 +33,7 @@ def main(input_file, debug=False, trace=False, wait=False):
         sys.path.append(
             os.path.join(os.path.dirname(os.path.realpath(__file__)), "uDdbg")
         )
-        try:
-            from udbg import UnicornDbg
-
-            print("[+] uDdbg debugger loaded.")
-        except Exception as ex:
-            debug = False
-            trace = True
-            raise Exception(
-                "[!] Could not load uDdbg (install with ./setupdebug.sh), falling back to trace output: {}".format(
-                    ex
-                )
-            )
+        from udbg import UnicornDbg
     if trace:
         print("[+] Settings trace hooks")
         uc.hook_add(UC_HOOK_BLOCK, unicorn_debug_block)
@@ -115,8 +110,10 @@ def main(input_file, debug=False, trace=False, wait=False):
             entry_point=pc,
             exit_point=pc + config.LENGTH,
             hide_binary_loader=True,
-            mappings=[(hex(x), x, unicorefuzz.unicorefuzz.PAGE_SIZE) for x in
-                      unicorefuzz.unicorefuzz._mapped_page_cache],
+            mappings=[
+                (hex(x), x, unicorefuzz.unicorefuzz.PAGE_SIZE)
+                for x in unicorefuzz.unicorefuzz._mapped_page_cache
+            ],
         )
 
         def dbg_except(x, y):

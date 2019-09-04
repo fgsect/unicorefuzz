@@ -5,9 +5,9 @@ import claripy
 import argparse
 
 from unicorefuzz import utils
+from unicorefuzz.harness import Harness
 
 cs = utils.init_capstone()
-
 
 class PageForwardingExplorer(angr.ExplorationTechnique):
     """
@@ -42,6 +42,10 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
         simgr.drop(stash="errored")  # Todo: only remove fixed ones.
         simgr.active.extend(new_active)
         return simgr
+
+
+class AngrHarness(Harness):
+    pass
 
 
 def main(input_file):

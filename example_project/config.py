@@ -45,9 +45,9 @@ ENTRY_RELATIVE_EXITS = []
 WORKDIR = os.path.join(os.getcwd(), "unicore_workdir")
 
 # Where AFL input should be read from
-AFL_INPUT = os.path.join(os.getcwd(), "afl_input")
+AFL_INPUTS = os.path.join(os.getcwd(), "afl_inputs")
 # Where AFL output should be placed at
-AFL_OUTPUT = os.path.join(os.getcwd(), "afl_output")
+AFL_OUTPUTS = os.path.join(os.getcwd(), "afl_outputs")
 
 # Optional AFL dictionary
 AFL_DICT = None

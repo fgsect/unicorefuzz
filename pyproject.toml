@@ -1,5 +1,8 @@
 [tool.black]
 exclude = '''
-AFLplusplus/
+(
+    AFLplusplus
+    | uDdbg
+    | __pycache__
 )
 '''

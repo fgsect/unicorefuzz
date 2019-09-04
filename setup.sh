@@ -1,6 +1,4 @@
 #!/bin/bash
-AFLPP_VERSION=2.53c
-UDDBG_VERSION=7881cf8207a94f6fa88c3d07b9c629037a2a850e 
 
 echo "================================================="
 echo "Unicorefuzz Installation script"
@@ -8,7 +6,7 @@ echo "================================================="
 echo
 echo "[*] Performing basic sanity checks..."
 
-if [ ! "`uname -s`" = "Linux" ]; then
+if [ ! "$(uname -s)" = "Linux" ]; then
   echo "[-] Info: Only tested on Linux... Continue at your own risk."
 fi
 
@@ -19,14 +17,14 @@ fi
 
 # python2 is necessary to build QEMU, everything else is python3
 for i in wget python2 python3 automake autoconf sha384sum cmake; do
-  T=`which "$i" 2>/dev/null`
+  T=$(which "$i" 2>/dev/null)
   if [ "$T" = "" ]; then
     echo "[-] Error: '$i' not found. Run 'sudo apt-get install $i'."
     exit 1
   fi
 done
 
-T=`which pip3 2>/dev/null`
+T=$(which pip3 2>/dev/null)
 if [ "$T" = "" ]; then
     echo "[-] Error: Could not find pip3. Run 'sudo apt-get install python3-pip'"
     exit 1
@@ -41,48 +39,58 @@ echo "[+] Installing python requirements"
 if [ -z "$VIRTUAL_ENV" ]; then
   echo "[*] Info: Installing unicorefuzz to system python using --user"
   pip3 install --user -r requirements.txt || exit 1
-  print "[*] Uninstalling the 'normal' unicorn first, if installed."
+  echo "[*] Uninstalling the 'normal' unicorn first, if installed."
   pip3 uninstall -y unicorn
   pip3 uninstall -y unicorn
 else
   echo "[*] Info: Installing python unicorn to virtualenv: $VIRTUAL_ENV"
   pip install -r requirements.txt || exit 1
-  print "[*] Uninstalling the 'normal' unicorn first, if installed."
+  echo "[*] Uninstalling the 'normal' unicorn first, if installed."
   pip uninstall -y unicorn
   pip uninstall -y unicorn
 fi
 echo "[*] All python deps have been installed."
 
-echo "[+] Cloning AFL++"
-git clone https://github.com/vanhauser-thc/AFLplusplus.git
-cd AFLplusplus || exit 1
-git checkout $AFLPP_VERSION || exit 1
+echo "[+] Cloning Submodules"
+git submodule init
+git submodule update || exit 1
 
-echo "[+] Running make for AFL"
+echo "[+] Running make for AFL++"
+cd AFLplusplus || exit 1
 make || exit 1
 
 echo "[+] Building unicorn_mode"
 cd unicorn_mode || exit 1
 chmod +x ./build_unicorn_support.sh || exit 1
 ./build_unicorn_support.sh || exit 1
+if [[ "$VIRTUAL_ENV" == "" ]]
+then
+  echo "[+] Doublechecking we have AFL Unicorn in py3"
+  cd unicorn/bindings || exit 1
+  pip3 uninstall unicorn
+  pip3 uninstall unicorn
+  python3 setup.py install --user || exit 1
+  cd ../../
+fi
+cd ../../
 echo "[*] Unicorn mode built." 
 
-echo "[+] Cloning uddbg"
-git clone https://github.com/igio90/uddbg.git 
-cd uddbg || exit 1
-git checkout 7881cf8207a94f6fa88c3d07b9c629037a2a850e || exit 1
+echo "[+] PIP installing uDdbg Deps"
+cd uDdbg || exit 1
 
 # got some issues with uddbg requirements.txt - let's get the latest versions manually. fingers crossed.
-if [[ "$virtual_env" != "" ]]
+if [[ "$VIRTUAL_ENV" != "" ]]
 then
   echo "[+] installing dependencies in virtualenv"
-  pip install prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate
+  pip install prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate || exit 1
+  pip install --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
 else
   echo "[+] installing dependencies as user"
-  pip install --user prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate
+  pip3 install --user prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate || exit 1
+  pip3 install --user --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
 fi
-echo "[+] done. harness.py -d will now work."
-echo "[*] To use AFL outside of unicorefuzz,"
-echo '    export PATH=$PATH' ":$(pwd)/AFLplusplus"
+echo "[*] Dependencies installed successfully."
 
-echo "[+] Unicore setup complete. Enjoy :)."
+echo "[*] To use AFL++ outside of unicorefuzz,"
+echo '    export PATH=$PATH' ":$(pwd)/AFLplusplus"
+echo "[*] Unicore setup complete. Enjoy :)."
