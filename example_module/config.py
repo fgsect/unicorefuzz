@@ -5,7 +5,7 @@ import struct
 
 from unicorn import Uc
 from unicorn.x86_const import UC_X86_REG_RAX, UC_X86_REG_RDX, UC_X86_REG_RDI
-from unicorefuzz import Unicorefuzz
+from unicorefuzz.unicorefuzz import Unicorefuzz
 
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -26,14 +26,11 @@ GDB_PORT = 1234
 
 # Either set this to load the module from the VM and break at module + offset...
 MODULE = "procfs1"
-BREAKOFFSET = 0x10
+BREAK_OFFSET = 0x10
 
 # Or this to break at a fixed offset.
-BREAKADDR = None
+BREAK_ADDR = None
 # You cannot set MODULE and BREAKOFFSET at the same time
-
-# Length of the function to fuzz (usually the return address)
-LENGTH = 0x19D - BREAKOFFSET
 
 # Additional exits here.
 # The Exit at entry + LENGTH will be added automatically.

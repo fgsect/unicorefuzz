@@ -28,7 +28,7 @@ from unicorn import (
     UcError,
 )
 
-from unicorefuzz import configspec, x64utils
+from unicorefuzz import x64utils
 
 DEFAULT_PAGE_SIZE = 0x1000
 PROBE_WRAPPER_WAIT_SECS = 0.5
@@ -136,9 +136,10 @@ def get_arch(archname: str) -> Architecture:
 
 
 class Unicorefuzz:
-    def __init__(self, config: [str, configspec]):
+    def __init__(self, config: [str, "configspec"]):
         if isinstance(config, str):
-            config = configspec.load_config(config)
+            from unicorefuzz.configspec import load_config
+            config = load_config(config)
         self.config = config  # type: configspec
         self.arch = get_arch(config.ARCH)  # type: Architecture
 

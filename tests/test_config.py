@@ -3,7 +3,7 @@ from unicorefuzz import configspec
 
 
 def test_config_load():
-    config = configspec.load_config("../example_project/config.py")
+    config = configspec.load_config("../example_module/config.py")
     assert hasattr(config, "AFL_INPUTS")
 
 

@@ -20,7 +20,9 @@ from avatar2 import Avatar, Target, X86
 from sh import which
 from unicorn import unicorn
 
-import unicorefuzz
+import unicorefuzz.unicorefuzz
+from unicorefuzz.unicorefuzz import Unicorefuzz
+from unicorefuzz.unicorefuzz import archs
 
 Required = collections.namedtuple("Required", "key type description param_names")
 Required.__new__.__defaults__ = ("*args",)
@@ -36,10 +38,10 @@ def nop_func(*args, **kwargs) -> None:
     pass
 
 
-def init_avatar_target(ucf: unicorefuzz.Unicorefuzz, avatar: Avatar) -> Target:
+def init_avatar_target(ucf: Unicorefuzz, avatar: Avatar) -> Target:
     """
     Init the target used by the probe wrapper.
-    The probe_wrapepr will set the breakpoint and forward regs and mem using this target.
+    The probe_wrapper will set the breakpoint and forward regs and mem using this target.
     :param ucf: Unicorefuzz instance, access config using ucf.config.
     :param avatar: Initialized Avatar to add target to.
     :return: An initialized target, added to Avatar.
@@ -68,7 +70,7 @@ init_func = place_input = nop_func  # type Callable
 
 # The spec the config.py needs to abide by.
 UNICOREFUZZ_SPEC = [
-    Required("ARCH", list(unicorefuzz.archs.keys()), "What architecture to emulate"),
+    Required("ARCH", list(archs.keys()), "What architecture to emulate"),
     Optional(
         "PAGE_SIZE",
         int,
@@ -86,7 +88,7 @@ UNICOREFUZZ_SPEC = [
     ),
     Optional("GDB_HOST", str, "localhost", "The GDB Host to connect to"),
     Required("GDB_PORT", int, "The GDB port to connect to"),
-    Optional("BREAKADDR", Union[int, None], None, "The absolute address to break at"),
+    Optional("BREAK_ADDR", Union[int, None], None, "The absolute address to break at"),
     Optional(
         "MODULE",
         Union[str, None],
@@ -94,7 +96,7 @@ UNICOREFUZZ_SPEC = [
         "A linux kernel module to break in (cannot be combined with BREAKADDR)",
     ),
     Optional(
-        "BREAKOFFSET",
+        "BREAK_OFFSET",
         Union[int, None],
         None,
         "Relative location in the MODULE to break in",
@@ -131,7 +133,7 @@ UNICOREFUZZ_SPEC = [
     Optional("AFL_DICT", Union[str, None], None, "AFL dictionary to use for fuzzing"),
     Optional(
         "init_func",
-        Callable[[unicorefuzz.Unicorefuzz, unicorn.Uc], None],
+        Callable[[Unicorefuzz, unicorn.Uc], None],
         lambda config: nop_func,
         """An init function called before forking.
         Will receive handle to ucf and unicorn as parameters.
@@ -146,7 +148,7 @@ UNICOREFUZZ_SPEC = [
     ),
     Required(
         "place_input",
-        Callable[[unicorefuzz.Unicorefuzz, unicorn.Uc, bytes], None],
+        Callable[[Unicorefuzz, unicorn.Uc, bytes], None],
         """Function placing input to the unicorn state. It receives ucf, unicorn and input as parameters.
         The function will be called for each execution, so keep it lightweight.
         Think testcase in libfuzzer.
@@ -158,14 +160,10 @@ UNICOREFUZZ_SPEC = [
         "ucf, uc, input",
     ),
     Optional(
-        "init_avatar_target(",
-        Callable[[unicorefuzz.Unicorefuzz, Avatar], Target],
+        "init_avatar_target",
+        Callable[[Unicorefuzz, Avatar], Target],
         lambda config: init_avatar_target,
-        """Init the target used by the probe wrapper.
-        The probe_wrapepr will set the breakpoint and forward regs and mem using this target.
-        :param ucf: Unicorefuzz instance, access config using ucf.config.
-        :param avatar: Initialized Avatar to add target to.
-        :return: An initialized target, added to Avatar.""",
+        init_avatar_target.__doc__,
         "ucf, avatar",
     ),
 ]  # type: List[Union[Required, Optional]]
@@ -400,11 +398,13 @@ def apply_spec(
             # Entry not found.
             if isinstance(entry, Optional):
                 default = entry.default
+                printable = default
                 if callable(default):
+                    printable = clean_source(default)
                     default = entry.default(module)
                 print_maybe(
                     "[*] Optional setting {} not set. Using default value: {}.\n\tDescription: {}".format(
-                        entry.key, default, entry.description
+                        entry.key, printable, entry.description
                     )
                 )
                 setattr(module, entry.key, default)

@@ -2,77 +2,100 @@
 import sys
 
 import argparse
+from typing import Any
 
 import unicorefuzz.unicorefuzz
+from unicorefuzz import configspec
+from unicorefuzz.configspec import serialize_spec, UNICOREFUZZ_SPEC
+from unicorefuzz.harness import Harness
+from unicorefuzz.probe_wrapper import ProbeWrapper
+
+
+def load_conf(args: argparse.Namespace) -> Any:
+    """
+    Loads the config from args
+    :param args: the arguments
+    :return: a loaded config
+    """
+    return configspec.load_config(args.config)
+
+
+# Note: The docstring will be used as commandline help for these funcs
+def print_spec(args: argparse.Namespace) -> None:
+    """
+    Outputs expected config.py spec.
+    """
+    print(serialize_spec(UNICOREFUZZ_SPEC))
+
+
+def wrap_probe(args: argparse.Namespace) -> None:
+    """
+    Attach, break and forward memory from target
+    Former probewrapper.py
+    """
+    ProbeWrapper(load_conf(args)).wrap_gdb_target()
+
+
+def emulate(args: argparse.Namespace) -> None:
+    """
+    Drop the memory in the harness and start the emulation
+    Former harness.py
+    """
+    Harness(load_conf(args)).harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Unicorefuzz, emulate kernels with AFL++-Unicorn"
     )
-    parser.add_subparsers()
-    parser.add_subparsers()
+    subparsers = parser.add_subparsers(help="What unicorefuzz function to use.")
 
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
+    config_printer = subparsers.add_parser("spec", help=print_spec.__doc__)
+    config_printer.set_defaults(function=print_spec)
 
-    foo_parser = subparsers.add_parser('foo')
-    foo_parser.set_defaults(function=foo)
+    probe_wrapper = subparsers.add_parser("wrap", help=wrap_probe.__doc__)
+    probe_wrapper.set_defaults(function=wrap_probe)
 
-    bar_parser = subparsers.add_parser('bar')
-    bar_parser.set_defaults(function=bar)
-
-    args = parser.parse_args()
-
-    parser = argparse.ArgumentParser(
-        description="Test harness for our sample kernel module"
+    probe_wrapper.add_argument(
+        "-c", "--config", type=str, default="config.py", help="The config file to use."
     )
-    parser.add_argument(
+
+    harness = subparsers.add_parser("emu", aliases={"emulate"}, help=emulate.__doc__)
+    harness.set_defaults(function=emulate)
+
+    harness.add_argument(
         "input_file",
         type=str,
         help="Path to the file containing the mutated input to load",
     )
-    parser.add_argument(
+    harness.add_argument(
         "-c", "--config", type=str, default="config.py", help="The config file to use."
     )
-    parser.add_argument(
+    harness.add_argument(
         "-d",
         "--debug",
         default=False,
         action="store_true",
         help="Starts the testcase in uUdbg (if installed)",
     )
-    parser.add_argument(
+    harness.add_argument(
         "-t",
         "--trace",
         default=False,
         action="store_true",
         help="Enables debug tracing",
     )
-    parser.add_argument(
+    harness.add_argument(
         "-w",
         "--wait",
         default=False,
         action="store_true",
         help="Wait for the state directory to be present",
     )
+
     args = parser.parse_args()
 
-    Harness(args.config)
-    Harness.harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
-
-if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        config_path = sys.argv[1]
-        if sys.argv[1] == "-h" or sys.argv[1] == "--help":
-            raise Exception(
-                "Probe wrapper for Unicorefuz.\nOnly expected (optional) parameter: config.py"
-            )
-    elif len(sys.argv) > 2:
-        raise Exception(
-            "Too many arguments. Only expected (optional) parameter: config.py"
-        )
+    if hasattr(args, "function"):
+        args.function(args)
     else:
-        config_path = os.getcwd()
-    config = configspec.load_config(config_path)
-
-    ProbeWrapper(config).wrap_gdb_target()
+        parser.print_help()

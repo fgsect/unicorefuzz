@@ -2,6 +2,7 @@
 import argparse
 import os
 import sys
+import time
 from typing import Optional, Tuple, List, Dict
 
 from capstone import Cs
@@ -9,7 +10,6 @@ from unicorn import *
 from unicorn.x86_const import *
 
 import unicorefuzz.unicorefuzz
-from uDdbg.udbg import UnicornDbg
 from unicorefuzz.unicorefuzz import Unicorefuzz, REJECTED_ENDING, archs, X64, X86, ARM
 from unicorefuzz import x64utils
 from unicorefuzz.x64utils import syscall_exit_hook
@@ -189,7 +189,9 @@ class Harness(Unicorefuzz):
         :param entry_point: Where to start
         :param exit_point: Exit point
         """
-        print("[*] Starting debugger...")
+        print("[*] Loading debugger...")
+        sys.path.append(self.config.UNICORE_PATH)
+        from uDdbg.udbg import UnicornDbg
         udbg = UnicornDbg()
 
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?

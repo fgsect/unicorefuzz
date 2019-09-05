@@ -70,7 +70,7 @@ class ProbeWrapper(Unicorefuzz):
         workdir = self.config.WORKDIR
         module = self.config.MODULE
         breakoffset = self.config.BREAK_OFFSET
-        breakaddress = self.config.BREAK_ADDRESS
+        breakaddress = self.config.BREAK_ADDR
         arch = self.arch
 
         if clear_state:
@@ -108,15 +108,18 @@ class ProbeWrapper(Unicorefuzz):
             print("Module " + module + " is at memory address " + hex(mem_addr))
             breakaddress = hex(mem_addr + breakoffset)
         else:
+            if breakaddress is None:
+                raise ValueError("Neither BREAK_ADDR nor MODULE + BREAK_OFFSET specified in config.py")
             breakaddress = hex(breakaddress)
 
         avatar = Avatar(arch=arch, output_directory=os.path.join(workdir, "avatar"))
 
-        target = config.init_avatar_target(self, avatar)
+        print("[*] Initializing Avatar2")
+        target = self.config.init_avatar_target(self, avatar)
 
-        target.set_breakpoint("*{}".format(self.config.BREAK))
+        target.set_breakpoint("*{}".format(breakaddress))
         print("[+] Breakpoint set at {}".format(breakaddress))
-        print("[*] waiting for bp hit...")
+        print("[*] Waiting for bp hit...")
         target.cont()
         target.wait()
 
