@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
-import angr
-import claripy
 import argparse
 
-from unicorefuzz import utils
+import angr
+import claripy
+
 from unicorefuzz.harness import Harness
 
 cs = utils.init_capstone()
+
 
 class PageForwardingExplorer(angr.ExplorationTechnique):
     """
@@ -45,7 +46,15 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
 
 
 class AngrHarness(Harness):
-    pass
+    def angr_load_registers(self, ucf, state):
+        """
+        Load registers to angr
+        """
+        for reg in state.arch.register_names.values():
+            try:
+                state.registers.store(reg, ucf.fetch_reg(reg))
+            except Exception as ex:
+                print("Failed to retrieve register {}: {}".format(reg, ex))
 
 
 def main(input_file):

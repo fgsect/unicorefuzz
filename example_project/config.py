@@ -3,9 +3,9 @@
 import os
 import struct
 
+from unicorn import Uc
 from unicorn.x86_const import UC_X86_REG_RAX, UC_X86_REG_RDX, UC_X86_REG_RDI
-
-from unicorefuzz import utils
+from unicorefuzz import Unicorefuzz
 
 UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -66,7 +66,7 @@ def init_func(uc):
 # It will be called for each execution, so keep it lightweight.
 # This can be compared to a testcase in libfuzzer.
 # if you want to ignore an input, you can os._exit(0) here (anything else is a lot slower).
-def place_input_skb(uc, input):
+def place_input_skb(ucf: Unicorefuzz, uc: Uc, input: bytes) -> None:
     """
     Places the input in memory and alters the input.
     This is an example for sk_buff in openvsswitch
@@ -80,15 +80,15 @@ def place_input_skb(uc, input):
     # read input to the correct position at param rdx here:
     rdx = uc.reg_read(UC_X86_REG_RDX)
     rdi = uc.reg_read(UC_X86_REG_RDI)
-    utils.map_page_blocking(uc, rdx)  # ensure sk_buf is mapped
+    ucf.map_page_blocking(uc, rdx)  # ensure sk_buf is mapped
     bufferPtr = struct.unpack("<Q", uc.mem_read(rdx + 0xD8, 8))[0]
-    utils.map_page_blocking(uc, bufferPtr)  # ensure the buffer is mapped
+    ucf.map_page_blocking(uc, bufferPtr)  # ensure the buffer is mapped
     uc.mem_write(rdi, input)  # insert afl input
     uc.mem_write(rdx + 0xC4, b"\xdc\x05")  # fix tail
 
 
-def place_input(uc, input):
+def place_input(ucf: Unicorefuzz, uc: Uc, input: bytes) -> None:
     rax = uc.reg_read(UC_X86_REG_RAX)
     # make sure the parameter memory is mapped
-    utils.map_page_blocking(uc, rax)
+    ucf.map_page_blocking(uc, rax)
     uc.mem_write(rax, input)  # insert afl input

@@ -2,178 +2,176 @@
 import os
 import shutil
 import sys
+from datetime import datetime
 
 import inotify.adapters
-from datetime import datetime
-from sh import which
-from avatar2 import Avatar, GDBTarget
+from avatar2 import Avatar
+from unicorefuzz import configspec
 
-from unicorefuzz.configspec import load_config
-from unicorefuzz.utils import get_base
-from unicorefuzz.unicorefuzz import REQUEST_FOLDER, STATE_FOLDER, REJECTED_ENDING, get_arch
+from unicorefuzz.unicorefuzz import (
+    STATE_FOLDER,
+    REJECTED_ENDING,
+    get_arch,
+    Unicorefuzz,
+    get_base,
+)
 
-GDB_PATH = which("gdb")
 
-
-def dump(workdir, target, base_address):
-    mem = target.read_memory(base_address, 0x1000, raw=True)
-    with open(
+class ProbeWrapper(Unicorefuzz):
+    def dump(self, workdir, target, base_address):
+        mem = target.read_memory(base_address, 0x1000, raw=True)
+        with open(
             os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb"
-    ) as f:
-        f.write(mem)
-    print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
+        ) as f:
+            f.write(mem)
+        print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
 
-
-def forward_requests(target, workdir, requests_path, output_path):
-    filenames = os.listdir(requests_path)
-    while len(filenames):
-        for filename in filenames:
-            base_address = get_base(int(filename, 16))
-            try:
-                print(
-                    "[+] {}: Received request for {:016x}".format(
-                        datetime.now(), base_address
+    def forward_requests(self, target, workdir, requests_path, output_path):
+        filenames = os.listdir(requests_path)
+        while len(filenames):
+            for filename in filenames:
+                base_address = get_base(int(filename, 16), config.PAGE_SIZE)
+                try:
+                    print(
+                        "[+] {}: Received request for {:016x}".format(
+                            datetime.now(), base_address
+                        )
                     )
-                )
-                if not os.path.isfile(os.path.join(output_path, str(base_address))):
-                    dump(workdir, target, base_address)
-                    # we should restart afl now
-            except KeyboardInterrupt as ex:
-                print("cya")
-                exit(0)
-            except Exception as e:
-                print(
-                    "Could not get memory region at {}: {} (Found mem corruption?)".format(
-                        hex(base_address), repr(e)
+                    if not os.path.isfile(os.path.join(output_path, str(base_address))):
+                        self.dump(workdir, target, base_address)
+                        # we should restart afl now
+                except KeyboardInterrupt as ex:
+                    print("cya")
+                    exit(0)
+                except Exception as e:
+                    print(
+                        "Could not get memory region at {}: {} (Found mem corruption?)".format(
+                            hex(base_address), repr(e)
+                        )
                     )
-                )
-                with open(
+                    with open(
                         os.path.join(
-                            output_path, "{:016x}{}".format(base_address, REJECTED_ENDING)
+                            output_path,
+                            "{:016x}{}".format(base_address, REJECTED_ENDING),
                         ),
                         "a",
-                ) as f:
-                    f.write(repr(e))
-            os.remove(os.path.join(requests_path, filename))
-        filenames = os.listdir(requests_path)
+                    ) as f:
+                        f.write(repr(e))
+                os.remove(os.path.join(requests_path, filename))
+            filenames = os.listdir(requests_path)
 
+    def wrap_gdb_target(self, clear_state: bool = True) -> None:
+        """
+        Attach to a GDB target, set breakpoint, forward Memory
+        :param clear_state: If the state folder should be cleared
+        """
+        request_path = self.requestdir
+        output_path = self.statedir
+        workdir = self.config.WORKDIR
+        module = self.config.MODULE
+        breakoffset = self.config.BREAK_OFFSET
+        breakaddress = self.config.BREAK_ADDRESS
+        arch = self.arch
 
-def wrap_gdb_target(
-        workdir,
-        module=None,
-        breakoffset=None,
-        breakaddress=None,
-        reset_state=True,
-        arch="x64",
-        gdb_port=1234,
-        gdb_host="localhost",
-):
-    request_path = os.path.join(workdir, REQUEST_FOLDER)
-    output_path = os.path.join(workdir, STATE_FOLDER)
-
-    if arch != "x64":
-        raise Exception("Unsupported arch")
-    if reset_state:
+        if clear_state:
+            try:
+                shutil.rmtree(output_path)
+            except:
+                pass
         try:
-            shutil.rmtree(output_path)
+            os.makedirs(output_path, exist_ok=True)
         except:
             pass
-    try:
-        os.makedirs(output_path, exist_ok=True)
-    except:
-        pass
 
-    if module:
-        if breakaddress is not None:
-            raise ValueError("Breakaddress and module supplied. They are not compatible.")
-        if breakoffset is None:
-            raise ValueError("Module but no breakoffset specified. Don't know where to break.")
-
-        mem_addr = os.popen("./get_mod_addr.sh " + module).readlines()
-        try:
-            mem_addr = int(mem_addr[0], 16)
-        except ValueError as ex:
-            print(
-                "Error decoding module addr. Either module {} has not been loaded or something went wrong with ssh ({})".format(
-                    module, ex
+        if module:
+            if breakaddress is not None:
+                raise ValueError(
+                    "Breakaddress and module supplied. They are not compatible."
                 )
-            )
-            exit(-1)
-        print("Module " + module + " is at memory address " + hex(mem_addr))
-        breakaddress = hex(mem_addr + breakoffset)
-    else:
-        breakaddress = hex(breakaddress)
+            if breakoffset is None:
+                raise ValueError(
+                    "Module but no breakoffset specified. Don't know where to break."
+                )
 
-    avatar = Avatar(
-        arch=get_arch(arch), output_directory=os.path.join(workdir, "avatar")
-    )
-    target = avatar.add_target(
-        GDBTarget, gdb_ip=gdb_host, gdb_port=gdb_port, gdb_executable=GDB_PATH
-    )
-    target.init()
-
-    target.set_breakpoint("*{}".format(breakaddress))
-    print("[*] Breakpoint set at {}".format(breakaddress))
-    print("[+] waiting for bp hit...")
-    target.cont()
-    target.wait()
-
-    print("[+] hit! dumping registers and memory")
-
-    # dump registers
-    for reg in get_arch(arch).reg_names:
-        written = True
-        reg_file = os.path.join(output_path, reg)
-        with open(reg_file, "w") as f:
+            mem_addr = os.popen(
+                os.path.join(self.config.UNICORE_PATH, "get_mod_addr.sh ") + module
+            ).readlines()
             try:
-                val = target.read_register(reg)
-                if isinstance(val, list):
-                    # Avatar special registers (xmm, ...)
-                    i32list = val
-                    val = 0
-                    for shift, i32 in enumerate(i32list):
-                        val += i32 << (shift * 32)
-                f.write(str(val))
-            except Exception as ex:
-                # print("Ignoring {}: {}".format(reg, ex))
-                written = False
-        if not written:
-            os.unlink(reg_file)
+                mem_addr = int(mem_addr[0], 16)
+            except ValueError as ex:
+                print(
+                    "Error decoding module addr. Either module {} has not been loaded or ssh is not configured ({})".format(
+                        module, ex
+                    )
+                )
+                exit(-1)
+            print("Module " + module + " is at memory address " + hex(mem_addr))
+            breakaddress = hex(mem_addr + breakoffset)
+        else:
+            breakaddress = hex(breakaddress)
 
-    if not os.path.isdir(request_path):
-        print("[+] Creating request folder")
-        os.mkdir(request_path)
+        avatar = Avatar(arch=arch, output_directory=os.path.join(workdir, "avatar"))
 
-    forward_requests(target, workdir, request_path, output_path)
-    print("[*] Initial dump complete. Listening for requests from ./harness.py.")
+        target = config.init_avatar_target(self, avatar)
 
-    i = inotify.adapters.Inotify()
-    # only readily written files
-    i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE)
-    for event in i.event_gen(yield_nones=False):
-        # print("Request: ", event)
-        forward_requests(target, workdir, request_path, output_path)
+        target.set_breakpoint("*{}".format(self.config.BREAK))
+        print("[+] Breakpoint set at {}".format(breakaddress))
+        print("[*] waiting for bp hit...")
+        target.cont()
+        target.wait()
 
-    print("[*] Exiting probe_wrapper (keyboard interrupt)")
+        print("[+] Breakpoint hit! dumping registers and memory")
+
+        # dump registers
+        for reg in arch.reg_names:
+            written = True
+            reg_file = os.path.join(output_path, reg)
+            with open(reg_file, "w") as f:
+                try:
+                    val = target.read_register(reg)
+                    if isinstance(val, list):
+                        # Avatar special registers (xmm, ...)
+                        i32list = val
+                        val = 0
+                        for shift, i32 in enumerate(i32list):
+                            val += i32 << (shift * 32)
+                    f.write(str(val))
+                except Exception as ex:
+                    # print("Ignoring {}: {}".format(reg, ex))
+                    written = False
+            if not written:
+                os.unlink(reg_file)
+
+        if not os.path.isdir(request_path):
+            print("[+] Creating request folder")
+            os.mkdir(request_path)
+
+        self.forward_requests(target, workdir, request_path, output_path)
+        print("[*] Initial dump complete. Listening for requests from ./harness.py.")
+
+        i = inotify.adapters.Inotify()
+        # noinspection PyUnresolvedReferences
+        i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE)
+        for event in i.event_gen(yield_nones=False):
+            # print("Request: ", event)
+            self.forward_requests(target, workdir, request_path, output_path)
+
+        print("[*] Exiting probe_wrapper (keyboard interrupt)")
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         config_path = sys.argv[1]
         if sys.argv[1] == "-h" or sys.argv[1] == "--help":
-            raise Exception("Probe wrapper for Unicorefuz.\nOnly expected (optional) parameter: config.py")
+            raise Exception(
+                "Probe wrapper for Unicorefuz.\nOnly expected (optional) parameter: config.py"
+            )
     elif len(sys.argv) > 2:
-        raise Exception("Too many arguments. Only expected (optional) parameter: config.py")
+        raise Exception(
+            "Too many arguments. Only expected (optional) parameter: config.py"
+        )
     else:
         config_path = os.getcwd()
-    config = load_config(config_path)
+    config = configspec.load_config(config_path)
 
-    wrap_gdb_target(
-        module=config.MODULE,
-        breakoffset=config.BREAKOFFSET,
-        breakaddress=config.BREAKADDR,
-        workdir=config.WORKDIR,
-        arch=config.ARCH,
-        gdb_port=config.GDB_PORT,
-        gdb_host=config.GDB_HOST,
-    )
+    ProbeWrapper(config).wrap_gdb_target()

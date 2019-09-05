@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+import sys
+
+import argparse
+
+import unicorefuzz.unicorefuzz
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Unicorefuzz, emulate kernels with AFL++-Unicorn"
+    )
+    parser.add_subparsers()
+    parser.add_subparsers()
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+
+    foo_parser = subparsers.add_parser('foo')
+    foo_parser.set_defaults(function=foo)
+
+    bar_parser = subparsers.add_parser('bar')
+    bar_parser.set_defaults(function=bar)
+
+    args = parser.parse_args()
+
+    parser = argparse.ArgumentParser(
+        description="Test harness for our sample kernel module"
+    )
+    parser.add_argument(
+        "input_file",
+        type=str,
+        help="Path to the file containing the mutated input to load",
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, default="config.py", help="The config file to use."
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        default=False,
+        action="store_true",
+        help="Starts the testcase in uUdbg (if installed)",
+    )
+    parser.add_argument(
+        "-t",
+        "--trace",
+        default=False,
+        action="store_true",
+        help="Enables debug tracing",
+    )
+    parser.add_argument(
+        "-w",
+        "--wait",
+        default=False,
+        action="store_true",
+        help="Wait for the state directory to be present",
+    )
+    args = parser.parse_args()
+
+    Harness(args.config)
+    Harness.harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
+
+if __name__ == "__main__":
+    if len(sys.argv) == 2:
+        config_path = sys.argv[1]
+        if sys.argv[1] == "-h" or sys.argv[1] == "--help":
+            raise Exception(
+                "Probe wrapper for Unicorefuz.\nOnly expected (optional) parameter: config.py"
+            )
+    elif len(sys.argv) > 2:
+        raise Exception(
+            "Too many arguments. Only expected (optional) parameter: config.py"
+        )
+    else:
+        config_path = os.getcwd()
+    config = configspec.load_config(config_path)
+
+    ProbeWrapper(config).wrap_gdb_target()

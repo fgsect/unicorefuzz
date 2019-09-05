@@ -1,12 +1,10 @@
 from typing import Callable
-
-import pytest
 from unicorefuzz import configspec
 
 
 def test_config_load():
     config = configspec.load_config("../example_project/config.py")
-    assert hasattr(config, "AFL_INPUT")
+    assert hasattr(config, "AFL_INPUTS")
 
 
 def test_config_print():

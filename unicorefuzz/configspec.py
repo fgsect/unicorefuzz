@@ -6,17 +6,21 @@ Lots of Required and Optional things.
 import collections
 import inspect
 import os
+from types import ModuleType
 from typing import (
     List,
     Union,
     Any,
-    Dict,
     Callable,
     TypeVar,
 )  # other types are not supported, sorry...
+from typing import TYPE_CHECKING
 
-from unicorefuzz import unicorefuzz
+from avatar2 import Avatar, Target, X86
+from sh import which
 from unicorn import unicorn
+
+import unicorefuzz
 
 Required = collections.namedtuple("Required", "key type description param_names")
 Required.__new__.__defaults__ = ("*args",)
@@ -28,9 +32,39 @@ Optional.__new__.__defaults__ = ("*args",)
 DEFAULT_PAGE_SIZE = 0x1000
 
 
-def nop_func(*args, **kwargs):
+def nop_func(*args, **kwargs) -> None:
     pass
 
+
+def init_avatar_target(ucf: unicorefuzz.Unicorefuzz, avatar: Avatar) -> Target:
+    """
+    Init the target used by the probe wrapper.
+    The probe_wrapepr will set the breakpoint and forward regs and mem using this target.
+    :param ucf: Unicorefuzz instance, access config using ucf.config.
+    :param avatar: Initialized Avatar to add target to.
+    :return: An initialized target, added to Avatar.
+    """
+    from avatar2 import GDBTarget
+
+    target = avatar.add_target(
+        GDBTarget,
+        gdb_ip=ucf.config.GDB_HOST,
+        gdb_port=ucf.config.GDB_PORT,
+        gdb_executable=ucf.config.GDB_PATH,
+    )
+    target.init()
+    return target
+
+
+# Just for autocompletion
+ARCH = X86  # type Architecture
+PAGE_SIZE = (
+    SCRATCH_ADDR
+) = SCRATCH_SIZE = GDB_PORT = BREAKADDR = BREAKOFFSET = -1  # type int
+GDB_HOST = (
+    MODULE
+) = WORKDIR = GDB_PATH = UNICORE_PATH = AFL_OUTPUT = AFL_DICT = ""  # type str
+init_func = place_input = nop_func  # type Callable
 
 # The spec the config.py needs to abide by.
 UNICOREFUZZ_SPEC = [
@@ -80,15 +114,16 @@ UNICOREFUZZ_SPEC = [
         os.path.join(os.getcwd(), "unicore_workdir"),
         "Path to UCF workdir to store state etc.",
     ),
+    Optional("GDB_PATH", str, which("gdb"), "The path GDB lives at"),
     Optional(
         "UNICORE_PATH",
         str,
         os.path.dirname(os.path.abspath(__file__)),
         "Custom path of Unicore installation",
     ),
-    Required("AFL_INPUT", str, "The seed directory to use for fuzzing"),
+    Required("AFL_INPUTS", str, "The seed directory to use for fuzzing"),
     Optional(
-        "AFL_OUTPUT",
+        "AFL_OUTPUTS",
         Union[str, None],
         lambda config: os.path.join(config.UNICORE_PATH, "afl_output"),
         "AFL output directory to use for fuzzing (default will be inside WORKDIR)",
@@ -122,10 +157,21 @@ UNICOREFUZZ_SPEC = [
         :param input: the input""",
         "ucf, uc, input",
     ),
+    Optional(
+        "init_avatar_target(",
+        Callable[[unicorefuzz.Unicorefuzz, Avatar], Target],
+        lambda config: init_avatar_target,
+        """Init the target used by the probe wrapper.
+        The probe_wrapepr will set the breakpoint and forward regs and mem using this target.
+        :param ucf: Unicorefuzz instance, access config using ucf.config.
+        :param avatar: Initialized Avatar to add target to.
+        :return: An initialized target, added to Avatar.""",
+        "ucf, avatar",
+    ),
 ]  # type: List[Union[Required, Optional]]
 
 
-def is_callable_type(typevar):
+def is_callable_type(typevar: Union[Callable, callable, TypeVar]) -> bool:
     """
     Returns True if typevar is callable or Callable
     """
@@ -138,7 +184,12 @@ def is_callable_type(typevar):
     return False
 
 
-def clean_source(func):
+def clean_source(func: Callable[[Any], Any]) -> str:
+    """
+    Receives the source of a function or lambda
+    :param func: The function to serialize
+    :return: The included source code
+    """
     source = inspect.getsource(func).split(":", 1)[1].strip()
     if source.endswith(","):
         # special case for lambdas
@@ -146,8 +197,7 @@ def clean_source(func):
     return source
 
 
-def stringify_spec_entry(entry):
-    # type: (Union[Optional, Required]) -> str
+def stringify_spec_entry(entry: Union[Optional, Required]) -> str:
     """Make a nice string out of it."""
     entrytype = entry.type
     if isinstance(entrytype, type):
@@ -192,10 +242,9 @@ def stringify_spec_entry(entry):
     )
 
 
-def serialize_spec(spec):
-    # type: (List[Union[Optional, Required]]) -> str
+def serialize_spec(spec: List[Union[Optional, Required]]) -> str:
     """
-    Prints a checker json spec in a readable multiline format
+    Prints a checker spec in a readable format, close to python.
     :param spec: a spec
     :return: formatted string
     """
@@ -208,7 +257,7 @@ def serialize_spec(spec):
     )
 
 
-def type_matches(val, expected_type):
+def type_matches(val: Any, expected_type: Union[List, TypeVar, None]) -> bool:
     """
     Returns if the type equals the expectation
     :param val: The value
@@ -255,8 +304,7 @@ def type_matches(val, expected_type):
     return False
 
 
-def check_type(name, val, expected_type):
-    # type: (str, str, Any) -> None
+def check_type(name: str, val: str, expected_type: Union[List, TypeVar, None]) -> None:
     """
     returns and converts if necessary
     :param name: the name of the value
@@ -271,14 +319,14 @@ def check_type(name, val, expected_type):
         )
 
 
-def import_py(mod_name, mod_path):
+def import_py(mod_name: str, mod_path: str) -> ModuleType:
     """
     Imports a python module by path
     :param mod_name: the name the module should be imported by
     :param mod_path: the path to load the module from
     :return: the module, as reference
     """
-    # see https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path
+    # Python 3.5+, see https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path for others.
     if not os.path.isfile(mod_path):
         raise IOError(
             "Could not open config at {} as file.".format(os.path.abspath(mod_path))
@@ -299,25 +347,19 @@ def import_py(mod_name, mod_path):
     except EnvironmentError:
         raise
     except:
-        pass  # we are not python 3.7, apparently.
-    try:
-        # python2.7 (untested)
-        import imp
+        try:
+            # python 3.3-3.4 (untested)
+            from importlib.machinery import SourceFileLoader
 
-        return imp.load_source(mod_name, os.path.abspath(mod_path))
-    except Exception as ex:
-        print(ex)
-    try:
-        # python 3.3-3.4 (untested)
-        from importlib.machinery import SourceFileLoader
-
-        return SourceFileLoader(mod_name, mod_path).load_module()
-    except Exception as ex:
-        print(ex)
-        raise EnvironmentError("Could not load {} from {}".format(mod_name, mod_path))
+            return SourceFileLoader(mod_name, mod_path).load_module()
+        except Exception as ex:
+            print(ex)
+            raise EnvironmentError(
+                "Could not load {} from {}".format(mod_name, mod_path)
+            )
 
 
-def load_config(path):
+def load_config(path: str) -> ModuleType:
     """
     :param path: path to config.py (including filename)
     :return: Loaded config (or ValueError)
@@ -328,8 +370,9 @@ def load_config(path):
     return config
 
 
-def apply_spec(module, spec, print_info=True):
-    # type: (Module, List[Union[Optional, Required]], bool) -> None
+def apply_spec(
+    module: Any, spec: List[Union[Optional, Required]], print_info: bool = True
+) -> None:
     """
     Checks if config implements the spec or parts are missing.
     Fills in Optional() values with their respective default values.
@@ -337,9 +380,9 @@ def apply_spec(module, spec, print_info=True):
     The spec is iterated in order - make sure optional values only depends on previous values.
 
     In case the spec fails, errors out with ValueError.
-    :param json:  the json
+    :param module: the element to verify the spec against
     :param spec: the spec
-    :param print_info: print info about replaced defaults.
+    :param print_info: print info about replaced defaults
     """
     errors = []
     if print_info:
