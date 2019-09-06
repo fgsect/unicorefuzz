@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 from typing import Any
 
 from unicorefuzz import configspec
@@ -60,6 +61,45 @@ def print_afl_path(args: argparse.Namespace) -> None:
     print(Unicorefuzz(load_conf(args, silent=True)).afl_path)
 
 
+def fuzz(args: argparse.Namespace) -> None:
+    """
+    Starts afl using ucf emu
+    """
+    id = args.id
+    restart = args.restart
+    if restart and id != "0":
+        raise ValueError("Only master (`id 0`) may `reset` the state.")
+    if id == 0:
+        id = "master"
+    else:
+        id = "fuzzer{}".format(id)
+    ucf = Unicorefuzz(load_conf(args))
+
+    if restart:
+        try:
+            os.unlink(ucf.config.AFL_OUTPUTS)
+        except:
+            pass
+
+    afl_inputs = ucf.config.AFL_INPUTS
+    # See if output is already created, if not, we want to rerun afl instead of restart.
+    if os.path.exists(os.path.join(ucf.config.AFL_OUTPUTS, id)):
+        afl_inputs = "-"
+
+    afl = os.path.join(ucf.afl_path, "afl-fuzz")
+    ucf_main = os.path.join(ucf.config.UNICORE_PATH, "ucf")
+
+    # AFL_COMPCONV_LEVEL=2 is an awesome addition to afl-unicorn, and definitely the one you want :)
+    # See afl++ repo
+    env = "PATH={}:$PATH AFL_COMPCOV_LEVEL=2".format(ucf.afl_path)
+    if args.print_outputs:
+        env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
+    run = "{} {} -U -m none -i {} -o {} -t 4000+ -M {} -- python3 {} emu @@ || exit 1".format(
+        env, afl, afl_inputs, ucf.config.AFL_OUTPUTS, id, ucf_main
+    )
+    os.system(run)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Unicorefuzz, emulate kernels with AFL++-Unicorn"
@@ -104,6 +144,22 @@ if __name__ == "__main__":
         default=True,
         action="store_true",
         help="Wait for the state directory to be present",
+    )
+
+    sub_fuzz = subparsers.add_parser("fuzz", help=fuzz.__doc__)
+    sub_fuzz.set_defaults(function=fuzz)
+    sub_fuzz.add_argument(
+        "-c", "--config", type=str, default="config.py", help="The config file to use."
+    )
+    sub_fuzz.add_argument(
+        "-i", "--id", type=str, default="0", help="The AFL multi fuzzer id to use (0 for master)."
+    )
+    sub_fuzz.add_argument(
+        "-r", "--restart", default=False, action="store_false",
+        help="If set, clears the afl_output directory before running.\nOnly works for master.\nDANGEROUS!!"
+    )
+    sub_fuzz.add_argument(
+        "-p", "--print-outputs", default=False, action="store_true", help="When fuzing, print all child output (for debug)",
     )
 
     sub_await = subparsers.add_parser("await", help=wait_for_wrapper.__doc__)

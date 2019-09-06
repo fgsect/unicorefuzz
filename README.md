@@ -52,7 +52,7 @@ When upgrading from an early version of ucf:
     - add all EXITs
 - start `ucf attach`, it will (try to) connect to gdb.
 - make the target execute the target function (by using it inside the vm)
-- after the breakpoint was hit, run `./startafl.sh`. Make sure afl++ is in the PATH. (Use `./resumeafl.sh` to resume using the same input folder)
+- after the breakpoint was hit, run `ucf fuzz`. Make sure afl++ is in the PATH. (Use `./resumeafl.sh` to resume using the same input folder)
 
 Putting afl's input to the correct location must be coded invididually for most targets.
 However with modern binary analysis frameworks like IDA or Ghidra it's possible to find the desired location's address.
@@ -78,8 +78,8 @@ $gdb
 >file ./linux/vmlinux
 >target remote :1234
 ```
-This dynamic method makes it rahter easy to find out breakpoints and that can then be fed to `config.py`.
-On top, `startafl.sh` will forward port 22 (ssh) to 8022 - you can use it to ssh into the VM.
+This dynamic method makes it rather easy to find out breakpoints and that can then be fed to `config.py`.
+On top, `startvm.sh` will forward port 22 (ssh) to 8022 - you can use it to ssh into the VM.
 This makes it easier to interact with it.
 
 ## Debugging
@@ -135,4 +135,9 @@ Unicorefuzz should(tm) work inside a virtualenv, in case nothing else helps.
 ### Stil won't start
 
 Run the harness without afl (`ucf emu -t ./sometestcase`).
+Make sure you are not in a virtualenv or in the correct one.
 If this works but it still crashes in AFL, set `AFL_DEBUG_CHILD_OUTPUT=1` to see some harness output while fuzzing.
+
+### All testcases time out
+
+Make sure `ucf attach` is running, in the same folder, and breakpoint has been triggered.
