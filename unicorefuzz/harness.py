@@ -10,7 +10,13 @@ from unicorn import *
 from unicorn.x86_const import *
 
 from unicorefuzz import x64utils
-from unicorefuzz.unicorefuzz import Unicorefuzz, REJECTED_ENDING, X64, uc_get_pc, uc_reg_const
+from unicorefuzz.unicorefuzz import (
+    Unicorefuzz,
+    REJECTED_ENDING,
+    X64,
+    uc_get_pc,
+    uc_reg_const,
+)
 from unicorefuzz.x64utils import syscall_exit_hook
 
 
@@ -140,9 +146,7 @@ class Harness(Unicorefuzz):
         exit_point = self.exits[0]
 
         # On error: map memory, add exits.
-        uc.hook_add(
-            UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self
-        )
+        uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
 
         if len(self.exits) > 1:
             # unicorn supports a single exit only (using the length param).
