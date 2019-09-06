@@ -90,7 +90,12 @@ else
   pip3 install --user --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
 fi
 echo "[*] Dependencies installed successfully."
-
+echo ""
 echo "[*] To use AFL++ outside of unicorefuzz,"
-echo '    export PATH=$PATH' ":$(pwd)/AFLplusplus"
-echo "[*] Unicore setup complete. Enjoy :)."
+echo '    export PATH=$PATH'":$(pwd)/AFLplusplus"
+echo "[+] To use 'ucf' from any folder:"
+echo '\e[32m    export PATH=$PATH'":$(pwd)\e[39m"
+echo ""
+echo "\e[5m        .----------------------------------------."
+echo "\e[5m        |--- Unicore setup complete. Enjoy :) ---|"
+echo "\e[5m        '----------------------------------------'"

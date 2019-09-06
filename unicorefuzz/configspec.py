@@ -317,11 +317,12 @@ def check_type(name: str, val: str, expected_type: Union[List, TypeVar, None]) -
         )
 
 
-def import_py(mod_name: str, mod_path: str) -> ModuleType:
+def import_py(mod_name: str, mod_path: str, silent: bool = False) -> ModuleType:
     """
     Imports a python module by path
     :param mod_name: the name the module should be imported by
     :param mod_path: the path to load the module from
+    :param silent: If True, nothing will be printed
     :return: the module, as reference
     """
     # Python 3.5+, see https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path for others.
@@ -330,7 +331,8 @@ def import_py(mod_name: str, mod_path: str) -> ModuleType:
             "Could not open config at {} as file.".format(os.path.abspath(mod_path))
         )
     else:
-        print("[+] Reading config from {}".format(os.path.abspath(mod_path)))
+        if not silent:
+            print("[+] Reading config from {}".format(os.path.abspath(mod_path)))
     try:
         # python3.5+
         import importlib.util
@@ -351,25 +353,25 @@ def import_py(mod_name: str, mod_path: str) -> ModuleType:
 
             return SourceFileLoader(mod_name, mod_path).load_module()
         except Exception as ex:
-            print(ex)
             raise EnvironmentError(
-                "Could not load {} from {}".format(mod_name, mod_path)
+                "Could not load {} from {}: {}".format(mod_name, mod_path, ex)
             )
 
 
-def load_config(path: str) -> ModuleType:
+def load_config(path: str, silent: bool = False) -> ModuleType:
     """
     :param path: path to config.py (including filename)
+    :param silent: If True, nothing will be printed
     :return: Loaded config (or ValueError)
     """
     path = os.path.abspath(path)
-    config = import_py("unicoreconfig", path)
-    apply_spec(config, UNICOREFUZZ_SPEC)
+    config = import_py("unicoreconfig", path, silent=silent)
+    apply_spec(config, UNICOREFUZZ_SPEC, silent=silent)
     return config
 
 
 def apply_spec(
-    module: Any, spec: List[Union[Optional, Required]], print_info: bool = True
+    module: Any, spec: List[Union[Optional, Required]], silent: bool = False
 ) -> None:
     """
     Checks if config implements the spec or parts are missing.
@@ -380,18 +382,18 @@ def apply_spec(
     In case the spec fails, errors out with ValueError.
     :param module: the element to verify the spec against
     :param spec: the spec
-    :param print_info: print info about replaced defaults
+    :param silent: If False, will print info about replaced defaults
     """
     errors = []
-    if print_info:
+    if silent:
 
         def print_maybe(*args):
-            print(*args)
+            pass
 
     else:
 
         def print_maybe(*args):
-            pass
+            print(*args)
 
     for entry in spec:
         if not hasattr(module, entry.key):

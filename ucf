@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import sys
 
 import argparse
@@ -9,15 +10,17 @@ from unicorefuzz import configspec
 from unicorefuzz.configspec import serialize_spec, UNICOREFUZZ_SPEC
 from unicorefuzz.harness import Harness
 from unicorefuzz.probe_wrapper import ProbeWrapper
+from unicorefuzz.unicorefuzz import Unicorefuzz
 
 
-def load_conf(args: argparse.Namespace) -> Any:
+def load_conf(args: argparse.Namespace, silent: bool = False) -> Any:
     """
     Loads the config from args
     :param args: the arguments
+    :param silent: If progress and config infos should be printed or not (if silent is True)
     :return: a loaded config
     """
-    return configspec.load_config(args.config)
+    return configspec.load_config(args.config, silent)
 
 
 # Note: The docstring will be used as commandline help for these funcs
@@ -44,14 +47,27 @@ def emulate(args: argparse.Namespace) -> None:
     Harness(load_conf(args)).harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
 
 
+def wait_for_wrapper(args: argparse.Namespace) -> None:
+    """
+    Blocks until data from probe wrapper becomes available
+    """
+    config = load_conf(args)
+    print("[*] Awaiting wrapper...")
+    Unicorefuzz(config).wait_for_probe_wrapper()
+
+
+def print_afl_path(args: argparse.Namespace) -> None:
+    """
+    print(Unicorefuzz(load_conf(args)).afl_path)
+    """
+    print(Unicorefuzz(load_conf(args, silent=True)).afl_path)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Unicorefuzz, emulate kernels with AFL++-Unicorn"
     )
     subparsers = parser.add_subparsers(help="What unicorefuzz function to use.")
-
-    config_printer = subparsers.add_parser("spec", help=print_spec.__doc__)
-    config_printer.set_defaults(function=print_spec)
 
     probe_wrapper = subparsers.add_parser("wrap", help=wrap_probe.__doc__)
     probe_wrapper.set_defaults(function=wrap_probe)
@@ -88,9 +104,27 @@ if __name__ == "__main__":
     harness.add_argument(
         "-w",
         "--wait",
-        default=False,
+        default=True,
         action="store_true",
         help="Wait for the state directory to be present",
+    )
+
+    sub_await = subparsers.add_parser("await", help=wait_for_wrapper.__doc__)
+    sub_await.set_defaults(function=wait_for_wrapper)
+    sub_await.add_argument(
+        "-c", "--config", type=str, default="config.py", help="The config file to use."
+    )
+
+    sub_afl_path = subparsers.add_parser("afl-path", help=print_afl_path.__doc__)
+    sub_afl_path.set_defaults(function=print_afl_path)
+    sub_afl_path.add_argument(
+        "-c", "--config", type=str, default="config.py", help="The config file to use."
+    )
+
+    sub_spec = subparsers.add_parser("spec", help=print_spec.__doc__)
+    sub_spec.set_defaults(function=print_spec)
+    sub_spec.add_argument(
+        "-c", "--config", type=str, default="config.py", help="The config file to use."
     )
 
     args = parser.parse_args()

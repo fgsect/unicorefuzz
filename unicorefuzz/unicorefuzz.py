@@ -30,6 +30,9 @@ from unicorn import (
 
 from unicorefuzz import x64utils
 
+AFL_PATH = "AFLplusplus"
+UDDBG_PATH = "uDdbg"
+
 DEFAULT_PAGE_SIZE = 0x1000
 PROBE_WRAPPER_WAIT_SECS = 0.5
 
@@ -139,6 +142,7 @@ class Unicorefuzz:
     def __init__(self, config: [str, "configspec"]):
         if isinstance(config, str):
             from unicorefuzz.configspec import load_config
+
             config = load_config(config)
         self.config = config  # type: configspec
         self.arch = get_arch(config.ARCH)  # type: Architecture
@@ -148,6 +152,8 @@ class Unicorefuzz:
 
         self.statedir = os.path.join(config.WORKDIR, "state")  # type: str
         self.requestdir = os.path.join(config.WORKDIR, "requests")  # type: str
+
+        self.exits = None  # type: Optional[List[int]]
 
     def wait_for_probe_wrapper(self) -> None:
         """
@@ -236,16 +242,17 @@ class Unicorefuzz:
                 print("Setting exit {0:x}".format(end_addr))
                 uc.mem_write(end_addr, x64utils.SYSCALL_OPCODE)
 
-    def map_page_blocking(self, uc: Uc, address: int, exits: List[int]) -> None:
+    def map_page(self, uc: Uc, address: int) -> None:
         """
         Maps a page at addr in the harness, asking probe_wrapper.
         """
-        workdir = self.config.WORKDIR
         page_size = self.config.PAGE_SIZE
         base_address = get_base(page_size, address)
-        input_file_name = os.path.join(self.requestdir, "{0:016x}".format(address))
-        dump_file_name = os.path.join(self.statedir, "{0:016x}".format(base_address))
         if base_address not in self._mapped_page_cache.keys():
+            input_file_name = os.path.join(self.requestdir, "{0:016x}".format(address))
+            dump_file_name = os.path.join(
+                self.statedir, "{0:016x}".format(base_address)
+            )
             if os.path.isfile(dump_file_name + REJECTED_ENDING):
                 print("CAN I HAZ EXPLOIT?")
                 os.kill(os.getpid(), signal.SIGSEGV)
@@ -262,18 +269,33 @@ class Unicorefuzz:
                         if len(content) < page_size:
                             time.sleep(0.001)
                             continue
+                        self._mapped_page_cache[base_address] = content
                         uc.mem_map(base_address, len(content))
                         uc.mem_write(base_address, content)
-                        self._mapped_page_cache[base_address] = content
-                        self.set_exits(uc, base_address, exits)
+                        self.set_exits(uc, base_address, self.exits)
                         return
                 except IOError:
                     pass
-                except Exception as e:  # todo this shouldn't happen if we don't map like idiots
-                    print(e)
+                except Exception as ex:  # todo this should never happen if we don't map like idiots
                     print(
-                        "map_page_blocking failed: base address={0:016x}".format(
-                            base_address
+                        "map_page_blocking failed: base address={:016x} ({})".format(
+                            base_address, ex
                         )
                     )
                     # exit(1)
+
+    @property
+    def afl_path(self):
+        """
+        Calculate afl++ path
+        :return: The folder AFLplusplus lives in
+        """
+        return os.path.abspath(os.path.join(self.config.UNICORE_PATH, AFL_PATH))
+
+    @property
+    def uddbg_path(self):
+        """
+        Calculate uDdbg path
+        :return: The folder uDdbg is cloned to
+        """
+        return os.path.abspath(os.path.join(self.config.UNICORE_PATH, AFL_PATH))

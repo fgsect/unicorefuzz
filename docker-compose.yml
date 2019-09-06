@@ -3,7 +3,7 @@ services:
   probe_wrapper:
     build: .
     image: unicorefuzz:latest
-    entrypoint: ['python3', './probe_wrapper.py']
+    entrypoint: ['python3', 'ucf']
     volumes:
       - type: volume
         source: unicorefuzz
@@ -31,7 +31,7 @@ services:
   # harness:
   #   build: .
   #   image: unicorefuzz:latest
-  #   entrypoint: ['python3', './harness.py', '--wait', '-t', 'testcase']
+  #   entrypoint: ['python3', 'ucf', 'emuu', '--wait', '-t', 'testcase']
   #   volumes:
   #     - type: volume
   #       source: unicorefuzz

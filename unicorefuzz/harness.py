@@ -53,14 +53,9 @@ def unicorn_debug_mem_access(
 
 
 def unicorn_debug_mem_invalid_access(
-    uc: Uc,
-    access: int,
-    address: int,
-    size: int,
-    value: int,
-    user_data: Tuple["Harness", List[int]],
+    uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
-    harness, exits = user_data  # type Unicorefuzz
+    harness = user_data  # type Unicorefuzz
     print(
         "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={})".format(
             uc, access, address, size, value, user_data
@@ -77,7 +72,7 @@ def unicorn_debug_mem_invalid_access(
             "        >>> INVALID Read: addr=0x{0:016x} size={1}".format(address, size)
         )
     try:
-        harness.map_page_blocking(uc, address, exits)
+        harness.map_page(uc, address)
     except KeyboardInterrupt:
         uc.emu_stop()
         return False
@@ -124,8 +119,6 @@ class Harness(Unicorefuzz):
         if wait:
             self.wait_for_probe_wrapper()
 
-        self.map_known_mem(uc)
-
         if debug or trace:
             print("[*] Reading from file {}".format(input_file))
 
@@ -133,32 +126,32 @@ class Harness(Unicorefuzz):
         self.uc_load_registers(uc)
 
         # let's see if the user wants a change.
-        config.init_func(uc)
+        config.init_func(self, uc)
 
         # get pc from unicorn state since init_func may have altered it.
         pc = unicorefuzz.uc_get_pc(uc, self.arch)
-
-        exits = self.calculate_exits(pc)
-        if not exits:
+        self.exits = self.calculate_exits(pc)
+        self.map_known_mem(uc)
+        if not self.exits:
             raise ValueError(
                 "No exits founds. Would run forever... Please set an exit address in config.py."
             )
         entry_point = pc
-        exit_point = exits[0]
+        exit_point = self.exits[0]
 
         # On error: map memory, add exits.
         uc.hook_add(
-            UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, (self, exits)
+            UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, (self, self.exits)
         )
 
-        if len(exits) > 1:
+        if len(self.exits) > 1:
             # unicorn supports a single exit only (using the length param).
             # We'll path the binary on load if we have need to support more.
             if self.arch == X64:
                 uc.hook_add(
                     UC_HOOK_INSN,
                     syscall_exit_hook,
-                    user_data=(exits, os._exit),
+                    user_data=(self.exits, os._exit),
                     arg1=UC_X86_INS_SYSCALL,
                 )
             else:
@@ -175,7 +168,7 @@ class Harness(Unicorefuzz):
         input_file.close()
 
         try:
-            config.place_input(uc, input)
+            config.place_input(self, uc, input)
         except Exception as ex:
             raise Exception(
                 "[!] Error setting testcase for input {}: {}".format(input, ex)
@@ -190,8 +183,10 @@ class Harness(Unicorefuzz):
         :param exit_point: Exit point
         """
         print("[*] Loading debugger...")
-        sys.path.append(self.config.UNICORE_PATH)
-        from uDdbg.udbg import UnicornDbg
+        sys.path.append(self.uddbg_path)
+        # noinspection PyUnresolvedReferences
+        from udbg import UnicornDbg
+
         udbg = UnicornDbg()
 
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
@@ -248,7 +243,7 @@ class Harness(Unicorefuzz):
             ):
                 try:
                     address = int(filename, 16)
-                    self.map_page_blocking(uc, address)
+                    self.map_page(uc, address)
                 except:
                     pass
 
@@ -284,7 +279,7 @@ class Harness(Unicorefuzz):
 
     def fetch_page_blocking(self, address: int, workdir: str) -> Tuple[int, bytes]:
         """
-        Fetches a page at addr in the harness, asking probe_wrapper, if necessary.
+        Fetches a page at addr in the harness, asking probe wrapper, if necessary.
         returns base_address, content
         """
         base_address = unicorefuzz.get_base(self.config.PAGE_SIZE, address)

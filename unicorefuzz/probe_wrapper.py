@@ -9,9 +9,7 @@ from avatar2 import Avatar
 from unicorefuzz import configspec
 
 from unicorefuzz.unicorefuzz import (
-    STATE_FOLDER,
     REJECTED_ENDING,
-    get_arch,
     Unicorefuzz,
     get_base,
 )
@@ -19,9 +17,9 @@ from unicorefuzz.unicorefuzz import (
 
 class ProbeWrapper(Unicorefuzz):
     def dump(self, workdir, target, base_address):
-        mem = target.read_memory(base_address, 0x1000, raw=True)
+        mem = target.read_memory(base_address, self.config.PAGE_SIZE, raw=True)
         with open(
-            os.path.join(workdir, STATE_FOLDER, "{0:016x}".format(base_address)), "wb"
+            os.path.join(self.statedir, "{0:016x}".format(base_address)), "wb"
         ) as f:
             f.write(mem)
         print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
@@ -30,7 +28,7 @@ class ProbeWrapper(Unicorefuzz):
         filenames = os.listdir(requests_path)
         while len(filenames):
             for filename in filenames:
-                base_address = get_base(int(filename, 16), config.PAGE_SIZE)
+                base_address = get_base(self.config.PAGE_SIZE, int(filename, 16))
                 try:
                     print(
                         "[+] {}: Received request for {:016x}".format(
@@ -109,7 +107,9 @@ class ProbeWrapper(Unicorefuzz):
             breakaddress = hex(mem_addr + breakoffset)
         else:
             if breakaddress is None:
-                raise ValueError("Neither BREAK_ADDR nor MODULE + BREAK_OFFSET specified in config.py")
+                raise ValueError(
+                    "Neither BREAK_ADDR nor MODULE + BREAK_OFFSET specified in config.py"
+                )
             breakaddress = hex(breakaddress)
 
         avatar = Avatar(arch=arch, output_directory=os.path.join(workdir, "avatar"))
@@ -150,7 +150,7 @@ class ProbeWrapper(Unicorefuzz):
             os.mkdir(request_path)
 
         self.forward_requests(target, workdir, request_path, output_path)
-        print("[*] Initial dump complete. Listening for requests from ./harness.py.")
+        print("[*] Initial dump complete. Listening for requests from ucf emu.")
 
         i = inotify.adapters.Inotify()
         # noinspection PyUnresolvedReferences
@@ -159,7 +159,7 @@ class ProbeWrapper(Unicorefuzz):
             # print("Request: ", event)
             self.forward_requests(target, workdir, request_path, output_path)
 
-        print("[*] Exiting probe_wrapper (keyboard interrupt)")
+        print("[*] Exiting probe wrapper (keyboard interrupt)")
 
 
 if __name__ == "__main__":

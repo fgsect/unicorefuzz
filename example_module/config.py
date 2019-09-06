@@ -7,8 +7,6 @@ from unicorn import Uc
 from unicorn.x86_const import UC_X86_REG_RAX, UC_X86_REG_RDX, UC_X86_REG_RDI
 from unicorefuzz.unicorefuzz import Unicorefuzz
 
-UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
-
 # A place to put scratch memory to. Non-kernelspace address should be fine.
 SCRATCH_ADDR = 0x80000
 # How much scratch to add. We don't ask for much. Default should be fine.
@@ -77,9 +75,9 @@ def place_input_skb(ucf: Unicorefuzz, uc: Uc, input: bytes) -> None:
     # read input to the correct position at param rdx here:
     rdx = uc.reg_read(UC_X86_REG_RDX)
     rdi = uc.reg_read(UC_X86_REG_RDI)
-    ucf.map_page_blocking(uc, rdx)  # ensure sk_buf is mapped
+    ucf.map_page(uc, rdx)  # ensure sk_buf is mapped
     bufferPtr = struct.unpack("<Q", uc.mem_read(rdx + 0xD8, 8))[0]
-    ucf.map_page_blocking(uc, bufferPtr)  # ensure the buffer is mapped
+    ucf.map_page(uc, bufferPtr)  # ensure the buffer is mapped
     uc.mem_write(rdi, input)  # insert afl input
     uc.mem_write(rdx + 0xC4, b"\xdc\x05")  # fix tail
 
@@ -87,5 +85,5 @@ def place_input_skb(ucf: Unicorefuzz, uc: Uc, input: bytes) -> None:
 def place_input(ucf: Unicorefuzz, uc: Uc, input: bytes) -> None:
     rax = uc.reg_read(UC_X86_REG_RAX)
     # make sure the parameter memory is mapped
-    ucf.map_page_blocking(uc, rax)
+    ucf.map_page(uc, rax)
     uc.mem_write(rax, input)  # insert afl input
