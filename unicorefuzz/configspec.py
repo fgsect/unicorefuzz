@@ -14,7 +14,6 @@ from typing import (
     Callable,
     TypeVar,
 )  # other types are not supported, sorry...
-from typing import TYPE_CHECKING
 
 from avatar2 import Avatar, Target, X86
 from sh import which
@@ -120,7 +119,7 @@ UNICOREFUZZ_SPEC = [
     Optional(
         "UNICORE_PATH",
         str,
-        os.path.dirname(os.path.abspath(__file__)),
+        os.path.dirname(os.path.abspath(os.path.join(unicorefuzz.__file__, ".."))),
         "Custom path of Unicore installation",
     ),
     Required("AFL_INPUTS", str, "The seed directory to use for fuzzing"),

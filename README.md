@@ -25,7 +25,7 @@ When upgrading from an early version of ucf:
 
 * Unicorefuzz will notify you of config changes and new options automatically.
 * Alternatively, run ` ucf spec` to output a commented `config.py` spec-like element.
-* `probe_wrapper.py` is now `ucf wrap`.
+* `probe_wrapper.py` is now `ucf attach`.
 * `harness.py` is now named `ucf emu`.
 * The song remains the same.
 
@@ -50,7 +50,7 @@ When upgrading from an early version of ucf:
     - provide the target's target function to the probe wrapper and harness
     - make the harness put AFL's input to the desired memory location by adopting the `place_input` func `config.py`
     - add all EXITs
-- start `ucf wrap`, it will (try to) connect to gdb.
+- start `ucf attach`, it will (try to) connect to gdb.
 - make the target execute the target function (by using it inside the vm)
 - after the breakpoint was hit, run `./startafl.sh`. Make sure afl++ is in the PATH. (Use `./resumeafl.sh` to resume using the same input folder)
 
@@ -101,7 +101,7 @@ To do this, you'll have to provide a non-used `SCRATCH_ADDR` in the `config.py`.
 
 ### Improve Fuzzing Speed
 
-Right now, the Unicorefuzz `ucf wrap` harness needs to be manually restarted after an amount of pages has been allocated. Allocated pages don't propagate back to the forkserver parent automatically and would need be reloaded from disk for each iteration.
+Right now, the Unicorefuzz `ucf attach` harness needs to be manually restarted after an amount of pages has been allocated. Allocated pages don't propagate back to the forkserver parent automatically and would need be reloaded from disk for each iteration.
 
 ### CMPXCHNG16b
 ~~Unicorn does not [handle CMPXCHNG16b correctly](https://github.com/unicorn-engine/unicorn/issues/1095).

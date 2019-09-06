@@ -6,20 +6,16 @@ from datetime import datetime
 
 import inotify.adapters
 from avatar2 import Avatar
-from unicorefuzz import configspec
 
-from unicorefuzz.unicorefuzz import (
-    REJECTED_ENDING,
-    Unicorefuzz,
-    get_base,
-)
+from unicorefuzz import configspec
+from unicorefuzz.unicorefuzz import REJECTED_ENDING, Unicorefuzz
 
 
 class ProbeWrapper(Unicorefuzz):
     def dump(self, workdir, target, base_address):
         mem = target.read_memory(base_address, self.config.PAGE_SIZE, raw=True)
         with open(
-            os.path.join(self.statedir, "{0:016x}".format(base_address)), "wb"
+            os.path.join(self.statedir, "{:016x}".format(base_address)), "wb"
         ) as f:
             f.write(mem)
         print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
@@ -28,10 +24,10 @@ class ProbeWrapper(Unicorefuzz):
         filenames = os.listdir(requests_path)
         while len(filenames):
             for filename in filenames:
-                base_address = get_base(self.config.PAGE_SIZE, int(filename, 16))
+                base_address = self.get_base(int(filename, 16))
                 try:
                     print(
-                        "[+] {}: Received request for {:016x}".format(
+                        "[+] {}: Received request for 0x{:016x}".format(
                             datetime.now(), base_address
                         )
                     )

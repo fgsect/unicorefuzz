@@ -3,15 +3,14 @@ import argparse
 import os
 import sys
 import time
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, Dict
 
 from capstone import Cs
 from unicorn import *
 from unicorn.x86_const import *
 
-import unicorefuzz.unicorefuzz
-from unicorefuzz.unicorefuzz import Unicorefuzz, REJECTED_ENDING, archs, X64, X86, ARM
 from unicorefuzz import x64utils
+from unicorefuzz.unicorefuzz import Unicorefuzz, REJECTED_ENDING, X64, uc_get_pc, uc_reg_const
 from unicorefuzz.x64utils import syscall_exit_hook
 
 
@@ -36,7 +35,7 @@ def unicorn_debug_instruction(
 
 
 def unicorn_debug_block(uc: Uc, address: int, size: int, user_data: None) -> None:
-    print("Basic Block: addr=0x{0:016x}, size=0x{1:016x}".format(address, size))
+    print("Basic Block: addr=0x{:016x}, size=0x{:016x}".format(address, size))
 
 
 def unicorn_debug_mem_access(
@@ -44,12 +43,12 @@ def unicorn_debug_mem_access(
 ) -> None:
     if access == UC_MEM_WRITE:
         print(
-            "        >>> Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(
+            "        >>> Write: addr=0x{:016x} size={} data=0x{:016x}".format(
                 address, size, value
             )
         )
     else:
-        print("        >>> Read: addr=0x{0:016x} size={1}".format(address, size))
+        print("        >>> Read: addr=0x{:016x} size={}".format(address, size))
 
 
 def unicorn_debug_mem_invalid_access(
@@ -63,14 +62,12 @@ def unicorn_debug_mem_invalid_access(
     )
     if access == UC_MEM_WRITE_UNMAPPED:
         print(
-            "        >>> INVALID Write: addr=0x{0:016x} size={1} data=0x{2:016x}".format(
+            "        >>> INVALID Write: addr=0x{:016x} size={} data=0x{:016x}".format(
                 address, size, value
             )
         )
     else:
-        print(
-            "        >>> INVALID Read: addr=0x{0:016x} size={1}".format(address, size)
-        )
+        print("        >>> INVALID Read: addr=0x{:016x} size={}".format(address, size))
     try:
         harness.map_page(uc, address)
     except KeyboardInterrupt:
@@ -86,7 +83,7 @@ class Harness(Unicorefuzz):
 
     def __init__(self, config) -> None:
         super().__init__(config)
-        self.fetched_regs = {}  # type: Dict[str, int]
+        self.fetched_regs = None  # type: Optional[Dict[str, int]]
 
     def harness(self, input_file: str, wait: bool, debug: bool, trace: bool) -> None:
         """
@@ -129,8 +126,11 @@ class Harness(Unicorefuzz):
         config.init_func(self, uc)
 
         # get pc from unicorn state since init_func may have altered it.
-        pc = unicorefuzz.uc_get_pc(uc, self.arch)
+        pc = uc_get_pc(uc, self.arch)
         self.exits = self.calculate_exits(pc)
+        # mappings used in init_func didn't have the pc yet.
+        for ex in self._deferred_exits:
+            self.set_exits(uc, ex, self.exits)
         self.map_known_mem(uc)
         if not self.exits:
             raise ValueError(
@@ -141,7 +141,7 @@ class Harness(Unicorefuzz):
 
         # On error: map memory, add exits.
         uc.hook_add(
-            UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, (self, self.exits)
+            UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self
         )
 
         if len(self.exits) > 1:
@@ -184,6 +184,7 @@ class Harness(Unicorefuzz):
         """
         print("[*] Loading debugger...")
         sys.path.append(self.uddbg_path)
+        print(sys.path)
         # noinspection PyUnresolvedReferences
         from udbg import UnicornDbg
 
@@ -220,7 +221,7 @@ class Harness(Unicorefuzz):
         except UcError as e:
             print(
                 "[!] Execution failed with error: {} at address {:x}".format(
-                    e, unicorefuzz.uc_get_pc(uc, self.arch)
+                    e, uc_get_pc(uc, self.arch)
                 )
             )
             self.force_crash(e)
@@ -261,9 +262,9 @@ class Harness(Unicorefuzz):
 
         if self.arch == X64:
             # prepare to do base register things
-            self.fetch_all_regs()
-            gs_base = self.fetched_regs["gs_base"]
-            fs_base = self.fetched_regs["fs_base"]
+            regs = self.fetch_all_regs()
+            gs_base = regs["gs_base"]
+            fs_base = regs["fs_base"]
 
             # This will execute code -> starts afl-unicorn forkserver!
             x64utils.set_gs_base(uc, scratch_addr, gs_base)
@@ -282,7 +283,7 @@ class Harness(Unicorefuzz):
         Fetches a page at addr in the harness, asking probe wrapper, if necessary.
         returns base_address, content
         """
-        base_address = unicorefuzz.get_base(self.config.PAGE_SIZE, address)
+        base_address = self.get_base(address)
         input_file_name = os.path.join(self.requestdir, "{0:016x}".format(address))
         dump_file_name = os.path.join(self.statedir, "{0:016x}".format(base_address))
         if base_address in self._mapped_page_cache.keys():
@@ -312,7 +313,7 @@ class Harness(Unicorefuzz):
                 except Exception as e:  # todo this shouldn't happen if we don't map like idiots
                     print(e)
                     print(
-                        "map_page_blocking failed: base address={0:016x}".format(
+                        "map_page_blocking failed: base address=0x{:016x}".format(
                             base_address
                         )
                     )
@@ -338,9 +339,9 @@ class Harness(Unicorefuzz):
                 # print("[d] Ignoring reg: {} (Ignored)".format(r))
                 continue
             try:
-                uc.reg_write(unicorefuzz.uc_reg_const(self.arch, r), value)
+                uc.reg_write(uc_reg_const(self.arch, key), value)
             except Exception as ex:
-                # print("[d] Faild to load reg: {} ({})".format(r, ex))
+                print("[d] Faild to load reg: {} ({})".format(key, ex))
                 pass
 
     def fetch_all_regs(self) -> Dict[str, int]:
@@ -350,7 +351,8 @@ class Harness(Unicorefuzz):
                 try:
                     self.fetched_regs[reg_name] = self._fetch_register(reg_name)
                 except Exception as ex:
-                    print("Failed to retrieve register {}: {}".format(reg_name, ex))
+                    # print("Failed to retrieve register {}: {}".format(reg_name, ex))
+                    pass
         return self.fetched_regs
 
 

@@ -73,8 +73,6 @@ archs = {
     "armbe": ARMBE,
 }
 
-UNICORE_PATH = os.path.dirname(os.path.abspath(__file__))
-
 
 def regs_from_unicorn(arch: Architecture) -> List[str]:
     """
@@ -123,14 +121,6 @@ def uc_get_pc(uc: Uc, arch: Architecture) -> int:
     return uc.reg_read(uc_reg_const(arch, arch.pc_name))
 
 
-def get_base(page_size: int, address: int) -> int:
-    """
-    Calculates the base address (aligned to PAGE_SIZE) to an address
-    All you base are belong to us.
-    """
-    return address - address % page_size
-
-
 def get_arch(archname: str) -> Architecture:
     """
     Look up Avatar architecture, add Ucf extras and return it
@@ -154,6 +144,8 @@ class Unicorefuzz:
         self.requestdir = os.path.join(config.WORKDIR, "requests")  # type: str
 
         self.exits = None  # type: Optional[List[int]]
+        # if exits is still None when we map a page, store pages that we still need to patch later.
+        self._deferred_exits = []  # type: List[int]
 
     def wait_for_probe_wrapper(self) -> None:
         """
@@ -174,9 +166,9 @@ class Unicorefuzz:
         """
         Return the filename for a page
         """
-        base_address = get_base(self.config.PAGE_SIZE, address)
+        base_address = self.get_base(address)
         return os.path.join(
-            self.config.workdir, "state", "{0:016x}".format(base_address)
+            self.config.workdir, "state", "{:016x}".format(base_address)
         )
 
     def exit(self, exitcode: int = 1) -> None:
@@ -237,22 +229,41 @@ class Unicorefuzz:
         """
         arch = self.arch
         # TODO: This only works for X64!
-        for end_addr in exits:
-            if get_base(self.config.PAGE_SIZE, end_addr) == base_address:
-                print("Setting exit {0:x}".format(end_addr))
-                uc.mem_write(end_addr, x64utils.SYSCALL_OPCODE)
+        if exits is None:
+            self._deferred_exits.append(base_address)
+        else:
+            if len(exits) <= 1:
+                # No need to patch anything, uc supports a single exit.
+                return
+            if len(exits) > 1:
+                if arch == X64:
+                    for end_addr in exits:
+                        if self.get_base(end_addr) == base_address:
+                            print("[*] Setting exit 0x{:016x}".format(end_addr))
+                            # Abusing the syscall opcode for exits.
+                            # Just make sure the whole opcode will fit here by trying to map the end addr.
+                            self.map_page(uc, end_addr + len(x64utils.SYSCALL_OPCODE))
+                            uc.mem_write(end_addr, x64utils.SYSCALL_OPCODE)
+                else:
+                    raise (
+                        ValueError(
+                            "Multiple exits are not yet supported for arch {} - {}".format(
+                                arch, exits
+                            )
+                        )
+                    )
 
-    def map_page(self, uc: Uc, address: int) -> None:
+    def map_page(self, uc: Uc, addr: int) -> None:
         """
         Maps a page at addr in the harness, asking probe_wrapper.
+        :param uc: The unicore
+        :param addr: The address
         """
         page_size = self.config.PAGE_SIZE
-        base_address = get_base(page_size, address)
+        base_address = self.get_base(addr)
         if base_address not in self._mapped_page_cache.keys():
-            input_file_name = os.path.join(self.requestdir, "{0:016x}".format(address))
-            dump_file_name = os.path.join(
-                self.statedir, "{0:016x}".format(base_address)
-            )
+            input_file_name = os.path.join(self.requestdir, "{:016x}".format(addr))
+            dump_file_name = os.path.join(self.statedir, "{:016x}".format(base_address))
             if os.path.isfile(dump_file_name + REJECTED_ENDING):
                 print("CAN I HAZ EXPLOIT?")
                 os.kill(os.getpid(), signal.SIGSEGV)
@@ -276,9 +287,11 @@ class Unicorefuzz:
                         return
                 except IOError:
                     pass
+                except UcError as ex:
+                    return
                 except Exception as ex:  # todo this should never happen if we don't map like idiots
                     print(
-                        "map_page_blocking failed: base address={:016x} ({})".format(
+                        "map_page_blocking failed: base address=0x{:016x} ({})".format(
                             base_address, ex
                         )
                     )
@@ -298,4 +311,14 @@ class Unicorefuzz:
         Calculate uDdbg path
         :return: The folder uDdbg is cloned to
         """
-        return os.path.abspath(os.path.join(self.config.UNICORE_PATH, AFL_PATH))
+        return os.path.abspath(os.path.join(self.config.UNICORE_PATH, UDDBG_PATH))
+
+    def get_base(self, addr):
+        """
+        Calculates the base address (aligned to PAGE_SIZE) to an address, using default configured page size
+        All you base are belong to us.
+        :param addr: the address to get the base for
+        :return: base addr
+        """
+        page_size = self.config.PAGE_SIZE
+        return addr - addr % page_size
