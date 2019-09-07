@@ -72,10 +72,12 @@ def fuzz(args: argparse.Namespace) -> None:
     restart = args.restart
     if restart and id != "0":
         raise ValueError("Only master (`id 0`) may `reset` the state.")
-    if id == 0:
+    if id == "0":
         id = "master"
+        mode = "-M master"
     else:
         id = "fuzzer{}".format(id)
+        mode = "-S fuzzer{}".format(id)
     ucf = Unicorefuzz(load_conf(args))
 
     if restart:
@@ -86,7 +88,8 @@ def fuzz(args: argparse.Namespace) -> None:
 
     afl_inputs = ucf.config.AFL_INPUTS
     # See if output is already created, if not, we want to rerun afl instead of restart.
-    if os.path.exists(os.path.join(ucf.config.AFL_OUTPUTS, id)):
+    if os.path.isdir(os.path.abspath(os.path.join(ucf.config.AFL_OUTPUTS, id))):
+        print("[*] AFL path for node {} already exists. Resuming fuzzing.".format(id))
         afl_inputs = "-"
 
     wait_for_wrapper(args, ucf) 
@@ -99,9 +102,11 @@ def fuzz(args: argparse.Namespace) -> None:
     env = "PATH={}:$PATH AFL_COMPCOV_LEVEL=2".format(ucf.afl_path)
     if args.print_outputs:
         env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
-    run = "{} {} -U -m none -i {} -o {} -t 4000+ -M {} -- python3 {} emu @@ || exit 1".format(
-        env, afl, afl_inputs, ucf.config.AFL_OUTPUTS, id, ucf_main
+    run = "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t 4000+ {mode} -- python3 {ucf_main} emu @@ || exit 1".format(
+        env=env, afl=afl, afl_in=afl_inputs, afl_out=ucf.config.AFL_OUTPUTS, mode=mode, id=id, ucf_main=ucf_main
     )
+    if args.print_outputs:
+        print("[*] Starting: ", run)
     os.system(run)
 
 
@@ -164,7 +169,7 @@ if __name__ == "__main__":
         help="If set, clears the afl_output directory before running.\nOnly works for master.\nDANGEROUS!!"
     )
     sub_fuzz.add_argument(
-        "-p", "--print-outputs", default=False, action="store_true", help="When fuzing, print all child output (for debug)",
+        "-P", "--print-outputs", default=False, action="store_true", help="When fuzing, print all child output (for debug)",
     )
 
     sub_await = subparsers.add_parser("await", help=wait_for_wrapper.__doc__)
