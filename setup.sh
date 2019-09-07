@@ -10,7 +10,7 @@ if [ ! "$(uname -s)" = "Linux" ]; then
   echo "[-] Info: Only tested on Linux... Continue at your own risk."
 fi
 
-if [ ! -f "startvm.sh" -o ! -f "startafl.sh" ]; then
+if [ ! -f "requirements.txt" -o ! -f "setup.sh" ]; then
   echo "[-] Error: key files not found - wrong working directory?"
   exit 1
 fi
