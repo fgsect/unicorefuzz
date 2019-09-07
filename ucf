@@ -45,11 +45,14 @@ def emulate(args: argparse.Namespace) -> None:
     Harness(load_conf(args)).harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
 
 
-def wait_for_wrapper(args: argparse.Namespace) -> None:
+def wait_for_wrapper(args: argparse.Namespace, ucf: Unicorefuzz=None) -> None:
     """
     Blocks until data from probe wrapper becomes available
     """
-    config = load_conf(args)
+    if ucf is not None:
+        config = ucf.config
+    else:
+        config = load_conf(args)
     print("[*] Awaiting wrapper...")
     Unicorefuzz(config).wait_for_probe_wrapper()
 
@@ -85,6 +88,8 @@ def fuzz(args: argparse.Namespace) -> None:
     # See if output is already created, if not, we want to rerun afl instead of restart.
     if os.path.exists(os.path.join(ucf.config.AFL_OUTPUTS, id)):
         afl_inputs = "-"
+
+    wait_for_wrapper(args, ucf) 
 
     afl = os.path.join(ucf.afl_path, "afl-fuzz")
     ucf_main = os.path.join(ucf.config.UNICORE_PATH, "ucf")
