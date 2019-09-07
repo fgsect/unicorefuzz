@@ -66,11 +66,9 @@ chmod +x ./build_unicorn_support.sh || exit 1
 if [[ "$VIRTUAL_ENV" == "" ]]
 then
   echo "[+] Doublechecking we have AFL Unicorn in py3"
-  cd unicorn/bindings || exit 1
-  pip3 uninstall unicorn
-  pip3 uninstall unicorn
+  cd unicorn/bindings/python || exit 1
   python3 setup.py install --user || exit 1
-  cd ../../
+  cd ../../../ || exit 1
 fi
 cd ../../
 echo "[*] Unicorn mode built." 
@@ -94,8 +92,8 @@ echo ""
 echo "[*] To use AFL++ outside of unicorefuzz,"
 echo '    export PATH=$PATH'":$(pwd)/AFLplusplus"
 echo "[+] To use 'ucf' from any folder:"
-echo '\e[32m    export PATH=$PATH'":$(pwd)\e[39m"
-echo ""
-echo "\e[5m        .----------------------------------------."
-echo "\e[5m        |--- Unicore setup complete. Enjoy :) ---|"
-echo "\e[5m        '----------------------------------------'"
+echo -e "\e[32m"'    export PATH=$PATH'":$(pwd)"
+echo -e "\e[39m"
+echo -e "\e[5m        .----------------------------------------."
+echo -e "\e[5m        |--- Unicore setup complete. Enjoy :) ---|"
+echo -e "\e[5m        '----------------------------------------'\e[25m"
