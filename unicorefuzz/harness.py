@@ -101,8 +101,9 @@ class Harness(Unicorefuzz):
         """
         uc, entry, exit = self.uc_init(input_file, wait, debug, trace)
         if debug:
-            return self.uc_debug(uc, entry_point=entry, exit_point=exit)
-        self.uc_run(uc, entry, exit)
+            self.uc_debug(uc, entry_point=entry, exit_point=exit)
+        else:
+            self.uc_run(uc, entry, exit)
 
     def uc_init(
         self, input_file, wait: bool = False, debug: bool = False, trace: bool = False
@@ -282,7 +283,7 @@ class Harness(Unicorefuzz):
             uc.mem_write(scratch_addr, arch.insn_nop)
             uc.emu_start(scratch_addr, until=0, count=1)
 
-    def fetch_page_blocking(self, address: int, workdir: str) -> Tuple[int, bytes]:
+    def fetch_page_blocking(self, address: int) -> Tuple[int, bytes]:
         """
         Fetches a page at addr in the harness, asking probe wrapper, if necessary.
         returns base_address, content

@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
 
 import argparse
+from typing import Optional, Dict, Tuple, Callable
 
 import angr
 import claripy
 
 from unicorefuzz.harness import Harness
 
-cs = utils.init_capstone()
-
 
 class PageForwardingExplorer(angr.ExplorationTechnique):
     """
-    Angr explorer forwarding all unmapped pages once they are hit
+    Angr explorer forwarding unmapped pages once they are hit
     """
 
-    def step(self, simgr):
-        super().step(simgr)
+    def __init__(self, page_fetcher: Callable[[int], Tuple[int, bytes]]) -> None:
+        """
+        :param page_fetcher: A function that takes an addr and returns a Tuple of (base_addr, content) of this page.
+        """
+        super().__init__()
+        self.page_fetcher = page_fetcher  # type: Callable[[int], Tuple[int, bytes]]
+
+    def step(self, simgr: angr.SimulationManager, **kwargs) -> angr.SimulationManager:
+        super().step(simgr, **kwargs)
         print(simgr)
         new_active = []
         for r in simgr.errored:
@@ -29,9 +35,11 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
                 addr = r.error.addr
             else:
                 r.reraise()
+                # explicitly raise, just to make pycharm happy
+                raise r.error.with_traceback(r.traceback)
 
-            print("mapping addr: {}".format(addr))
-            pageaddr, pagecontent = utils.fetch_page_blocking(addr)
+            print("mapping addr: 0x{:016x}".format(addr))
+            pageaddr, pagecontent = self.page_fetcher(addr)
             try:
                 s.memory.map_region(pageaddr, len(pagecontent), 7)
             except Exception as ex:
@@ -55,6 +63,13 @@ class AngrHarness(Harness):
                 state.registers.store(reg, ucf.fetch_reg(reg))
             except Exception as ex:
                 print("Failed to retrieve register {}: {}".format(reg, ex))
+
+    def __init__(self, config) -> None:
+        super().__init__(config)
+        self.fetched_regs = None  # type: Optional[Dict[str, int]]
+
+    def get_angry(self):
+        self.uc
 
 
 def main(input_file):

@@ -291,7 +291,7 @@ class Unicorefuzz:
                     return
                 except Exception as ex:  # todo this should never happen if we don't map like idiots
                     print(
-                        "map_page_blocking failed: base address=0x{:016x} ({})".format(
+                        "map_page failed: base address=0x{:016x} ({})".format(
                             base_address, ex
                         )
                     )

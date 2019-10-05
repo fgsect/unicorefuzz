@@ -5,14 +5,19 @@ import sys
 from datetime import datetime
 
 import inotify.adapters
-from avatar2 import Avatar
+from avatar2 import Avatar, Target
 
 from unicorefuzz import configspec
 from unicorefuzz.unicorefuzz import REJECTED_ENDING, Unicorefuzz
 
 
 class ProbeWrapper(Unicorefuzz):
-    def dump(self, workdir, target, base_address):
+    def dump(self, target: Target, base_address: int) -> None:
+        """
+        Reads the memory at base_addres from avatar and dumps it to the state dir
+        :param target: The avatar target
+        :param base_address: The addr
+        """
         mem = target.read_memory(base_address, self.config.PAGE_SIZE, raw=True)
         with open(
             os.path.join(self.statedir, "{:016x}".format(base_address)), "wb"
@@ -20,7 +25,15 @@ class ProbeWrapper(Unicorefuzz):
             f.write(mem)
         print("[*] {}: Dumped 0x{:016x}".format(datetime.now(), base_address))
 
-    def forward_requests(self, target, workdir, requests_path, output_path):
+    def forward_requests(
+        self, target: Target, requests_path: str, output_path: str
+    ) -> None:
+        """
+        Forward current requests
+        :param target: the avatar target to forward from
+        :param requests_path: the path to listen for requests in
+        :param output_path: the path to output pages to
+        """
         filenames = os.listdir(requests_path)
         while len(filenames):
             for filename in filenames:
@@ -32,7 +45,7 @@ class ProbeWrapper(Unicorefuzz):
                         )
                     )
                     if not os.path.isfile(os.path.join(output_path, str(base_address))):
-                        self.dump(workdir, target, base_address)
+                        self.dump(target, base_address)
                         # we should restart afl now
                 except KeyboardInterrupt as ex:
                     print("cya")
@@ -111,7 +124,7 @@ class ProbeWrapper(Unicorefuzz):
         avatar = Avatar(arch=arch, output_directory=os.path.join(workdir, "avatar"))
 
         print("[*] Initializing Avatar2")
-        target = self.config.init_avatar_target(self, avatar)
+        target = self.config.init_avatar_target(self, avatar)  # type: Target
 
         target.set_breakpoint("*{}".format(breakaddress))
         print("[+] Breakpoint set at {}".format(breakaddress))
@@ -145,7 +158,7 @@ class ProbeWrapper(Unicorefuzz):
             print("[+] Creating request folder")
             os.mkdir(request_path)
 
-        self.forward_requests(target, workdir, request_path, output_path)
+        self.forward_requests(target, request_path, output_path)
         print("[*] Initial dump complete. Listening for requests from ucf emu.")
 
         i = inotify.adapters.Inotify()
@@ -153,7 +166,7 @@ class ProbeWrapper(Unicorefuzz):
         i.add_watch(request_path, mask=inotify.constants.IN_CLOSE_WRITE)
         for event in i.event_gen(yield_nones=False):
             # print("Request: ", event)
-            self.forward_requests(target, workdir, request_path, output_path)
+            self.forward_requests(target, request_path, output_path)
 
         print("[*] Exiting probe wrapper (keyboard interrupt)")
 
