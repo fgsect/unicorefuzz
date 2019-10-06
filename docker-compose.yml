@@ -3,7 +3,7 @@ services:
   probe_wrapper:
     build: .
     image: unicorefuzz:latest
-    entrypoint: ['python3', 'ucf']
+    entrypoint: ['python3', 'ucf', 'attach']
     volumes:
       - type: volume
         source: unicorefuzz
@@ -14,7 +14,7 @@ services:
   afl:
     build: .
     image: unicorefuzz:latest
-    entrypoint: ['./startafl.sh']
+    entrypoint: ['python3', 'ucf', 'fuzz']
     volumes:
       - type: volume
         source: unicorefuzz

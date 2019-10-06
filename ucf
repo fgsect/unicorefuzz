@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+The main file of unicorefuzz.
+This parses the config and provides all the commandline functionality.
+"""
 
 import argparse
 import os

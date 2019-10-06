@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+This thing connects to avatar and listens to requests for new pages (and dumps them)
+Used for `ucf attach`
+"""
 import os
 import shutil
 import sys

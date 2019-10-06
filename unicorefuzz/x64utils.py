@@ -1,3 +1,7 @@
+"""
+Special stuff for the x64 architecture
+Mostly using x64 for x86_64 since everybody knows what we mean and it's more concise, btw.
+"""
 from typing import Tuple, List, Callable
 
 from unicorn import Uc

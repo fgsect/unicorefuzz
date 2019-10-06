@@ -1,9 +1,12 @@
 #!/usr/bin/env python
+"""
+Main (Unicorn-)Harness, used alongside AFL.
+"""
 import argparse
 import os
 import sys
 import time
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List
 
 from capstone import Cs
 from unicorn import *
@@ -96,18 +99,28 @@ class Harness(Unicorefuzz):
         The default harness, receiving memory from probe wrapper and running it in unicorn.
         :param input_file: the file to read
         :param wait: if we want to wait
-        :param debug: run debugger or not
+        :param debug: if we should enable unicorn debugger
         :param trace: trace or not
         """
-        uc, entry, exit = self.uc_init(input_file, wait, debug, trace)
+        uc, entry, exits = self.uc_init(
+            input_file, wait, trace, verbose=(debug or trace)
+        )
         if debug:
-            self.uc_debug(uc, entry_point=entry, exit_point=exit)
+            self.uc_debug(uc, entry_point=entry, exit_point=exits[0])
         else:
-            self.uc_run(uc, entry, exit)
+            self.uc_run(uc, entry, exits[0])
 
     def uc_init(
-        self, input_file, wait: bool = False, debug: bool = False, trace: bool = False
-    ) -> Tuple[Uc, int, int]:
+        self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
+    ) -> Tuple[Uc, int, List[int]]:
+        """
+        Initializes unicorn with the given params
+        :param input_file: input file to drop into the emulator with config.init_func
+        :param wait: block until state dir becomes available
+        :param trace: if we should add trace hooks to unicorn
+        :param verbose: enables some more logging
+        :return: Tuple of (unicorn, entry_point, exits)
+        """
         config = self.config
         uc = Uc(self.arch.unicorn_arch, self.arch.unicorn_mode)
 
@@ -123,7 +136,7 @@ class Harness(Unicorefuzz):
         if wait:
             self.wait_for_probe_wrapper()
 
-        if debug or trace:
+        if verbose:
             print("[*] Reading from file {}".format(input_file))
 
         # we leave out gs_base and fs_base on x64 since they start the forkserver
@@ -134,29 +147,28 @@ class Harness(Unicorefuzz):
 
         # get pc from unicorn state since init_func may have altered it.
         pc = uc_get_pc(uc, self.arch)
-        self.exits = self.calculate_exits(pc)
+        exits = self.calculate_exits(pc)
         # mappings used in init_func didn't have the pc yet.
         for ex in self._deferred_exits:
-            self.set_exits(uc, ex, self.exits)
+            self.set_exits(uc, ex, exits)
         self.map_known_mem(uc)
-        if not self.exits:
+        if not exits:
             raise ValueError(
                 "No exits founds. Would run forever... Please set an exit address in config.py."
             )
         entry_point = pc
-        exit_point = self.exits[0]
 
         # On error: map memory, add exits.
         uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
 
-        if len(self.exits) > 1:
+        if len(exits) > 1:
             # unicorn supports a single exit only (using the length param).
             # We'll path the binary on load if we have need to support more.
             if self.arch == X64:
                 uc.hook_add(
                     UC_HOOK_INSN,
                     syscall_exit_hook,
-                    user_data=(self.exits, os._exit),
+                    user_data=(exits, os._exit),
                     arg1=UC_X86_INS_SYSCALL,
                 )
             else:
@@ -178,7 +190,7 @@ class Harness(Unicorefuzz):
             raise Exception(
                 "[!] Error setting testcase for input {}: {}".format(input, ex)
             )
-        return uc, entry_point, exit_point
+        return uc, entry_point, exits
 
     def uc_debug(self, uc: Uc, entry_point: int, exit_point: int) -> None:
         """
@@ -349,8 +361,49 @@ class Harness(Unicorefuzz):
                 print("[d] Faild to load reg: {} ({})".format(key, ex))
                 pass
 
-    def fetch_all_regs(self) -> Dict[str, int]:
-        if self.fetched_regs is None:
+
+    def uc_reg_const(self, reg_name: str) -> int:
+        """
+        Gets the reg const for the current arch
+        :param reg_name: the reg name
+        :return: UC_ const for the register of this name
+        """
+        return uc_reg_const(self.arch, reg_name)
+
+    def uc_reg_read(self, uc: Uc, reg_name: str) -> int:
+        """
+        Reads a register by name, resolving the UC const for the current architecture.
+        Handles potential special cases like base registers
+        :param uc: the unicorn instance to read the register from
+        :param reg_name: the register name
+        :return: register content
+        """
+        reg_name = reg_name.lower()
+        if reg_name == "fs_base":
+            return x64utils.get_fs_base(uc, self.config.SCRATCH_ADDR)
+        if reg_name == "gs_base":
+            return x64utils.get_gs_base(uc, self.config.SCRATCH_ADDR)
+        else:
+            return uc.reg_read(self.uc_reg_const(reg_name))
+
+    def uc_read_page(self, uc: Uc, addr: int) -> Tuple[int, bytes]:
+        """
+        Reads a page at the given addr from unicorn.
+        Resolves the base addr automatically.
+        :param uc: The unicorn instance
+        :param addr: An address inside the page to read
+        :return: Tuple of (base_addr, content)
+        """
+        base_addr = self.get_base(addr)
+        return base_addr, uc.mem_read(base_addr, self.config.PAGE_SIZE)
+
+    def fetch_all_regs(self, refetch: bool = False) -> Dict[str, int]:
+        """
+        Fetches all registers from state folder
+        :param refetch: reload them from disk (defaults to False)
+        :return: regname to content mapping
+        """
+        if refetch or self.fetched_regs is None:
             self.fetched_regs = {}
             for reg_name in self.arch.reg_names:
                 try:

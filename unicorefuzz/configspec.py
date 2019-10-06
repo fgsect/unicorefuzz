@@ -1,5 +1,5 @@
 """
-File for reading in and validating the config.
+This thing reads and validates the config.
 The actual spec can be found a few lines below.
 Lots of Required and Optional things.
 """
@@ -327,7 +327,9 @@ def import_py(mod_name: str, mod_path: str, silent: bool = False) -> ModuleType:
     # Python 3.5+, see https://stackoverflow.com/questions/67631/how-to-import-a-module-given-the-full-path for others.
     if not os.path.isfile(mod_path):
         raise IOError(
-            "Could not open config at {} as file.".format(os.path.abspath(mod_path))
+            "Could not open config at {} as file. Make sure it exists.".format(
+                os.path.abspath(mod_path)
+            )
         )
     else:
         if not silent:

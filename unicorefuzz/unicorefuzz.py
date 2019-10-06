@@ -1,7 +1,11 @@
+"""
+The heart of all ucf actions.
+Defines most functionality used by the harnesses.
+"""
 import os
 import signal
 import time
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from avatar2 import X86_64, ARM_CORTEX_M3, ARMV7M, ARMBE
 from avatar2.archs import Architecture
@@ -28,7 +32,7 @@ from unicorn import (
     UcError,
 )
 
-from unicorefuzz import x64utils
+from unicorefuzz import x64utils, configspec
 
 AFL_PATH = "AFLplusplus"
 UDDBG_PATH = "uDdbg"
@@ -129,7 +133,7 @@ def get_arch(archname: str) -> Architecture:
 
 
 class Unicorefuzz:
-    def __init__(self, config: [str, "configspec"]):
+    def __init__(self, config: [str, "configspec"]) -> None:
         if isinstance(config, str):
             from unicorefuzz.configspec import load_config
 
@@ -155,9 +159,8 @@ class Unicorefuzz:
             print("[.] Waiting for probewrapper to be available...")
             time.sleep(PROBE_WRAPPER_WAIT_SECS)
 
-    def calculate_exits(self, entry: int):
+    def calculate_exits(self, entry: int) -> List[int]:
         config = self.config
-        exits = []
         # add MODULE_EXITS to EXITS
         exits = config.EXITS + [x + entry for x in config.ENTRY_RELATIVE_EXITS]
         return exits
@@ -218,7 +221,7 @@ class Unicorefuzz:
         """
         print(self.serialize_spec())
 
-    def set_exits(self, uc: Uc, base_address: int, exits: List[int]):
+    def set_exits(self, uc: Uc, base_address: int, exits: List[int]) -> None:
         """
         We replace all hooks and exits with syscalls since they should be rare in kernel code.
         Then, when we encounter a syscall, we figure out if a syscall or exit occurred.
@@ -298,7 +301,7 @@ class Unicorefuzz:
                     # exit(1)
 
     @property
-    def afl_path(self):
+    def afl_path(self) -> str:
         """
         Calculate afl++ path
         :return: The folder AFLplusplus lives in
@@ -306,14 +309,14 @@ class Unicorefuzz:
         return os.path.abspath(os.path.join(self.config.UNICORE_PATH, AFL_PATH))
 
     @property
-    def uddbg_path(self):
+    def uddbg_path(self) -> str:
         """
         Calculate uDdbg path
         :return: The folder uDdbg is cloned to
         """
         return os.path.abspath(os.path.join(self.config.UNICORE_PATH, UDDBG_PATH))
 
-    def get_base(self, addr):
+    def get_base(self, addr: int) -> int:
         """
         Calculates the base address (aligned to PAGE_SIZE) to an address, using default configured page size
         All you base are belong to us.
