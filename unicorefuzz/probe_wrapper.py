@@ -87,11 +87,11 @@ class ProbeWrapper(Unicorefuzz):
         if clear_state:
             try:
                 shutil.rmtree(output_path)
-            except:
+            except Exception:
                 pass
         try:
             os.makedirs(output_path, exist_ok=True)
-        except:
+        except Exception:
             pass
 
         if module:

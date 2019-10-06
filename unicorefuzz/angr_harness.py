@@ -4,16 +4,15 @@ Harness to do Symbolic Execution.
 """
 
 import argparse
-from typing import Optional, Dict, Tuple, Callable, List
+from typing import Tuple, Callable, List
 
 import angr
 import claripy
+from avatar2.archs import X86, X86_64, ARM
 from unicorn import Uc
 
 from unicorefuzz.harness import Harness
 from unicorefuzz.unicorefuzz import uc_reg_const
-
-from avatar2.archs import X86, X86_64, ARM
 
 X86.angr_arch = angr.archinfo.arch_x86
 X86_64.angr_arch = angr.archinfo.arch_amd64

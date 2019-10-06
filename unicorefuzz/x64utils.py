@@ -5,7 +5,12 @@ Mostly using x64 for x86_64 since everybody knows what we mean and it's more con
 from typing import Tuple, List, Callable
 
 from unicorn import Uc
-from unicorn.x86_const import *
+from unicorn.x86_const import (
+    UC_X86_REG_RAX,
+    UC_X86_REG_RDX,
+    UC_X86_REG_RCX,
+    UC_X86_REG_RIP,
+)
 
 INSN_WRMSR = b"\x0f\x30"
 

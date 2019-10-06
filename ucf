@@ -6,7 +6,7 @@ This parses the config and provides all the commandline functionality.
 
 import argparse
 import os
-from typing import Any, Callable, Optional, Set, Iterable
+from typing import Any, Callable, Iterable
 
 from unicorefuzz import configspec
 from unicorefuzz.angr_harness import AngrHarness

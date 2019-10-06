@@ -253,7 +253,6 @@ class Harness(Unicorefuzz):
         :param uc:
         :return:
         """
-        workdir = self.config.WORKDIR
         for filename in os.listdir(self.statedir):
             if (
                 not filename.endswith(REJECTED_ENDING)
@@ -262,7 +261,7 @@ class Harness(Unicorefuzz):
                 try:
                     address = int(filename, 16)
                     self.map_page(uc, address)
-                except:
+                except Exception:
                     pass
 
     def uc_start_forkserver(self, uc: Uc):
