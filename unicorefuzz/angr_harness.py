@@ -13,6 +13,38 @@ from unicorn import Uc
 from unicorefuzz.harness import Harness
 from unicorefuzz.unicorefuzz import uc_reg_const
 
+from avatar2.archs import X86, X86_64, ARM
+
+X86.angr_arch = angr.archinfo.arch_x86
+X86_64.angr_arch = angr.archinfo.arch_amd64
+ARM.angr_arch = angr.archinfo.arch_arm
+ARM.angr_arch = angr.archinfo.arch_arm
+
+
+def mark_input_symbolic(ucf: "AngrHarness", uc: Uc, state: angr.SimState, input):
+    """
+    Marks the right place symbolic
+    :param ucf: The angr harness
+    :param uc: fully loaded unicorn instance
+    :param state: fully loaded angr instance
+    :param input: the input from file
+    """
+    raise Exception("TODO :)")
+
+
+def angr_store_mem(state: angr.SimState, pageaddr: int, pagecontent: bytes) -> None:
+    """
+    Store some state, maybe mapping the mem region along the way.
+    :param state: the state to store mem to
+    :param pageaddr: the addr to store at
+    :param pagecontent: the contents to store
+    """
+    try:
+        state.memory.map_region(pageaddr, len(pagecontent), 7)
+    except Exception as ex:
+        print("Not mapping {:016x}: {}".format(pageaddr, ex))
+    state.memory.store(pageaddr, pagecontent)
+
 
 class PageForwardingExplorer(angr.ExplorationTechnique):
     """
@@ -45,11 +77,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
 
             print("mapping addr: 0x{:016x}".format(addr))
             pageaddr, pagecontent = self.page_fetcher(addr)
-            try:
-                s.memory.map_region(pageaddr, len(pagecontent), 7)
-            except Exception as ex:
-                print("Could not map: {}".format(ex))
-
+            angr_store_mem(s, pageaddr, pagecontent)
             s.memory.store(pageaddr, pagecontent)
             new_active.append(s)
 
@@ -87,25 +115,34 @@ class AngrHarness(Harness):
         :param config: the config to use
         """
         super().__init__(config)
-        self.fetched_regs = None  # type: Optional[Dict[str, int]]
+
+    def angr_load_mapped_pages(self, uc: Uc, state: angr.SimState) -> None:
+        """
+        Loads all currently mapped unicorn mem regions into angr
+        :param uc: The uc instance to load from
+        :param state: the angr instance to load to
+        """
+        for begin, end, perms in uc.mem_regions():
+            angr_store_mem(state, begin, uc.mem_read(begin, end - begin))
 
     def get_angry(self, input_file: str) -> None:
+        """
+        The core, running something in angr.
+        :param input_file: input file. Not that needed since it'll be symbolic, but #shrug
+        """
         # Instead of doing all the init routines again, we just init unicorn and fiddle out the contents from there.
-        uc, entry_point, exits = self.uc_init(
-            input_file, wait=True
-        )  # type: Uc, int, List[int]
+        uc, pc, exits = self.uc_init(input_file, wait=True)  # type: Uc, int, List[int]
 
-        # rip = utils.fetch_register("rip")
-        # pageaddr, pagecontent = utils.fetch_page_blocking(rip)
-        # pagepath = utils.path_for_page(pageaddr)
+        self.fetch_page_blocking(pc)
+        pagepath = self.path_for_page(pc)
 
         p = angr.Project(
             pagepath,
             load_options={
                 "main_opts": {
                     "backend": "blob",
-                    "base_addr": pageaddr,
-                    "arch": "x86_64",
+                    "base_addr": pagepath,
+                    "arch": self.arch.angr_arch,
                 }
             },
         )
@@ -113,16 +150,17 @@ class AngrHarness(Harness):
         state = p.factory.blank_state(
             add_options=angr.options.unicorn | {angr.options.REPLACEMENT_SOLVER}
         )
-        utils.angr_load_registers(state)
+        self.angr_load_registers(uc, state)
+        self.angr_load_mapped_pages(uc, state)
 
         # s.solver.eval_one(s.regs.rdi)
-        rdi = utils.fetch_register("rdi")
-        pageaddr, content = utils.fetch_page_blocking(rdi)
+        rdi = self.uc_reg_read("rdi")
+        # pageaddr, content = utils.fetch_page_blocking(rdi)
 
-        state.memory.map_region(pageaddr, len(content), 7)
-        state.memory.store(pageaddr, content)
+        # state.memory.map_region(pageaddr, len(content), 7)
+        # state.memory.store(pageaddr, content)
 
-        input_file = open(input_file, "rb")  # load afl's input
+        # input_file = open(input_file, "rb")  # load afl's input
 
         input = input_file.read()
         input_file.close()
@@ -135,7 +173,7 @@ class AngrHarness(Harness):
         state.memory.store(rdi, input_symbolic)
 
         simgr = p.factory.simulation_manager(state)
-        simgr.use_technique(PageForwardingExplorer())
+        simgr.use_technique(PageForwardingExplorer(self.fetch_page_blocking))
         simgr.use_technique(angr.exploration_techniques.DFS())
         while simgr.active:
             print(simgr)

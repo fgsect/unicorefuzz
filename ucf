@@ -6,9 +6,10 @@ This parses the config and provides all the commandline functionality.
 
 import argparse
 import os
-from typing import Any
+from typing import Any, Callable, Optional, Set, Iterable
 
 from unicorefuzz import configspec
+from unicorefuzz.angr_harness import AngrHarness
 from unicorefuzz.configspec import serialize_spec, UNICOREFUZZ_SPEC
 from unicorefuzz.harness import Harness
 from unicorefuzz.probe_wrapper import ProbeWrapper
@@ -46,10 +47,22 @@ def emulate(args: argparse.Namespace) -> None:
     Drop the memory in the harness and start the emulation
     Former harness.py
     """
-    Harness(load_conf(args)).harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
+    Harness(load_conf(args)).harness(
+        args.input_file, debug=args.debug, trace=args.trace, wait=args.wait
+    )
 
 
-def wait_for_wrapper(args: argparse.Namespace, ucf: Unicorefuzz=None) -> None:
+def run_angr(args: argparse.Namespace) -> None:
+    """
+    Drop the memory in the angr harness and start concolic execution
+    Former angr-harness.py
+    """
+    AngrHarness(load_conf(args)).harness(
+        args.input_file, debug=args.debug, trace=args.trace, wait=args.wait
+    )
+
+
+def wait_for_wrapper(args: argparse.Namespace, ucf: Unicorefuzz = None) -> None:
     """
     Blocks until data from probe wrapper becomes available
     """
@@ -96,7 +109,7 @@ def fuzz(args: argparse.Namespace) -> None:
         print("[*] AFL path for node {} already exists. Resuming fuzzing.".format(id))
         afl_inputs = "-"
 
-    wait_for_wrapper(args, ucf) 
+    wait_for_wrapper(args, ucf)
 
     afl = os.path.join(ucf.afl_path, "afl-fuzz")
     ucf_main = os.path.join(ucf.config.UNICORE_PATH, "ucf")
@@ -107,11 +120,55 @@ def fuzz(args: argparse.Namespace) -> None:
     if args.print_outputs:
         env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
     run = "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t 4000+ {mode} -- python3 {ucf_main} emu @@ || exit 1".format(
-        env=env, afl=afl, afl_in=afl_inputs, afl_out=ucf.config.AFL_OUTPUTS, mode=mode, id=id, ucf_main=ucf_main
+        env=env,
+        afl=afl,
+        afl_in=afl_inputs,
+        afl_out=ucf.config.AFL_OUTPUTS,
+        mode=mode,
+        id=id,
+        ucf_main=ucf_main,
     )
     if args.print_outputs:
         print("[*] Starting: ", run)
     os.system(run)
+
+
+# noinspection PyProtectedMember,PyDefaultArgument
+def create_subparser(
+    subparsers: argparse._SubParsersAction,
+    name: str,
+    func: Callable,
+    aliases: Iterable[str] = [],
+    uses_config: bool = True,
+    uses_input: bool = False,
+) -> argparse.ArgumentParser:
+    """
+    Creates and inits a subparser, initializing help from docstring
+    :param subparsers: the initialized parser.add_subparsers
+    :param name: the name for the new subparser
+    :param func: the func to call (and to get the docstring from as help)
+    :param aliases: set of aliases (other names), if needed
+    :param uses_config: if the ucf config can be supplied using `-c`
+    :param uses_input: if an input file can be supplied using `-i`
+    :return: the initialized and added new subparser
+    """
+    subparser = subparsers.add_parser(name, aliases=aliases, help=func.__doc__)
+    subparser.set_defaults(function=func)
+    if uses_input:
+        subparser.add_argument(
+            "input_file",
+            type=str,
+            help="Path to the file containing the mutated input to load",
+        )
+    if uses_config:
+        subparser.add_argument(
+            "-c",
+            "--config",
+            type=str,
+            default="config.py",
+            help="The config file to use.",
+        )
+    return subparser
 
 
 if __name__ == "__main__":
@@ -119,24 +176,10 @@ if __name__ == "__main__":
         description="Unicorefuzz, emulate kernels with AFL++-Unicorn"
     )
     subparsers = parser.add_subparsers(help="What unicorefuzz function to use.")
+    probe_wrapper = create_subparser(subparsers, "attach", wrap_probe)
 
-    probe_wrapper = subparsers.add_parser("attach", help=wrap_probe.__doc__)
-    probe_wrapper.set_defaults(function=wrap_probe)
-
-    probe_wrapper.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
-    )
-
-    harness = subparsers.add_parser("emu", aliases={"emulate"}, help=emulate.__doc__)
-    harness.set_defaults(function=emulate)
-
-    harness.add_argument(
-        "input_file",
-        type=str,
-        help="Path to the file containing the mutated input to load",
-    )
-    harness.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
+    harness = create_subparser(
+        subparsers, "emu", emulate, aliases=["emulate"], uses_input=True
     )
     harness.add_argument(
         "-d",
@@ -160,38 +203,35 @@ if __name__ == "__main__":
         help="Wait for the state directory to be present",
     )
 
-    sub_fuzz = subparsers.add_parser("fuzz", help=fuzz.__doc__)
-    sub_fuzz.set_defaults(function=fuzz)
+    sub_fuzz = create_subparser(subparsers, "fuzz", fuzz)
     sub_fuzz.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
+        "-i",
+        "--id",
+        type=str,
+        default="0",
+        help="The AFL multi fuzzer id to use (0 for master).",
     )
     sub_fuzz.add_argument(
-        "-i", "--id", type=str, default="0", help="The AFL multi fuzzer id to use (0 for master)."
+        "-r",
+        "--restart",
+        default=False,
+        action="store_false",
+        help="If set, clears the afl_output directory before running.\nOnly works for master.\nDANGEROUS!!",
     )
     sub_fuzz.add_argument(
-        "-r", "--restart", default=False, action="store_false",
-        help="If set, clears the afl_output directory before running.\nOnly works for master.\nDANGEROUS!!"
-    )
-    sub_fuzz.add_argument(
-        "-P", "--print-outputs", default=False, action="store_true", help="When fuzing, print all child output (for debug)",
+        "-P",
+        "--print-outputs",
+        default=False,
+        action="store_true",
+        help="When fuzing, print all child output (for debug)",
     )
 
-    sub_await = subparsers.add_parser("await", help=wait_for_wrapper.__doc__)
-    sub_await.set_defaults(function=wait_for_wrapper)
-    sub_await.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
-    )
+    sub_await = create_subparser(subparsers, "await", wait_for_wrapper)
+    sub_afl_path = create_subparser(subparsers, "afl-path", print_afl_path)
+    sub_spec = create_subparser(subparsers, "spec", print_spec)
 
-    sub_afl_path = subparsers.add_parser("afl-path", help=print_afl_path.__doc__)
-    sub_afl_path.set_defaults(function=print_afl_path)
-    sub_afl_path.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
-    )
-
-    sub_spec = subparsers.add_parser("spec", help=print_spec.__doc__)
-    sub_spec.set_defaults(function=print_spec)
-    sub_spec.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
+    angr = create_subparser(
+        subparsers, "angr", run_angr, aliases=["concolic"], uses_input=True
     )
 
     args = parser.parse_args()
