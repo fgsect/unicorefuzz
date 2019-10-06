@@ -361,7 +361,6 @@ class Harness(Unicorefuzz):
                 print("[d] Faild to load reg: {} ({})".format(key, ex))
                 pass
 
-
     def uc_reg_const(self, reg_name: str) -> int:
         """
         Gets the reg const for the current arch

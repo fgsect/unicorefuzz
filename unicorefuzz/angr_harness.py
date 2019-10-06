@@ -95,7 +95,6 @@ class AngrHarness(Harness):
             input_file, wait=True
         )  # type: Uc, int, List[int]
 
-
         # rip = utils.fetch_register("rip")
         # pageaddr, pagecontent = utils.fetch_page_blocking(rip)
         # pagepath = utils.path_for_page(pageaddr)
@@ -103,7 +102,11 @@ class AngrHarness(Harness):
         p = angr.Project(
             pagepath,
             load_options={
-                "main_opts": {"backend": "blob", "base_addr": pageaddr, "arch": "x86_64"}
+                "main_opts": {
+                    "backend": "blob",
+                    "base_addr": pageaddr,
+                    "arch": "x86_64",
+                }
             },
         )
 
