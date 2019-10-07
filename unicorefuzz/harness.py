@@ -298,6 +298,22 @@ class Harness(Unicorefuzz):
             uc.mem_write(scratch_addr, arch.insn_nop)
             uc.emu_start(scratch_addr, until=0, count=1)
 
+    def _raise_if_reject(self, base_address: int, dump_file_name: str) -> None:
+        """
+        If dump_file_name + REJECTED_ENDING exists, raises exception
+        :param base_address: the base addr we're currently working with
+        :param dump_file_name: the dump filename
+        """
+        if os.path.isfile(dump_file_name + REJECTED_ENDING):
+            with open(dump_file_name + REJECTED_ENDING, "r") as f:
+                err = "".join(f.readlines()).strip()
+                # TODO: Exception class?
+                raise Exception(
+                    "Page at 0x{:016x} was rejected by target: {}".format(
+                        base_address, err
+                    )
+                )
+
     def fetch_page_blocking(self, address: int) -> Tuple[int, bytes]:
         """
         Fetches a page at addr in the harness, asking probe wrapper, if necessary.
@@ -309,18 +325,14 @@ class Harness(Unicorefuzz):
         if base_address in self._mapped_page_cache.keys():
             return base_address, self._mapped_page_cache[base_address]
         else:
-            if os.path.isfile(dump_file_name + REJECTED_ENDING):
-                # TODO: Exception class?
-                raise Exception("Page can not be loaded from Target")
-                # os.kill(os.getpid(), signal.SIGSEGV)
+            self._raise_if_reject(base_address, dump_file_name)
+            # Creating the input file == request
             if not os.path.isfile(dump_file_name):
                 open(input_file_name, "a").close()
             print("Requesting page 0x{:016x} from `ucf attach`".format(base_address))
             while 1:
+                self._raise_if_reject(base_address, dump_file_name)
                 try:
-                    if os.path.isfile(dump_file_name + REJECTED_ENDING):
-                        # TODO: Exception class?
-                        raise Exception("Page can not be loaded from Target")
                     with open(dump_file_name, "rb") as f:
                         content = f.read()
                         if len(content) < self.config.PAGE_SIZE:
@@ -330,13 +342,6 @@ class Harness(Unicorefuzz):
                         return base_address, content
                 except IOError:
                     pass
-                # except Exception as e:  # todo this shouldn't happen if we don't map like idiots
-                #   print(e)
-                #   print(
-                #     "map_page_blocking failed: base address=0x{:016x}".format(
-                #         base_address
-                #     )
-                #   )
 
     def _fetch_register(self, name: str) -> int:
         """

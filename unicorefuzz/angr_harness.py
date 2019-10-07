@@ -8,9 +8,12 @@ from typing import Tuple, Callable, List
 
 import angr
 import claripy
+from angr.concretization_strategies import SimConcretizationStrategy
 from angr.engines.vex.ccall import amd64g_check_ldmxcsr
 from angr.engines.vex.dirty import x86g_dirtyhelper_write_cr0
 from avatar2.archs import X86, X86_64, ARM, ARM_CORTEX_M3
+from claripy.ast import Base
+from cle import Clemory
 from unicorn import Uc
 
 from unicorefuzz.harness import Harness
@@ -45,6 +48,8 @@ def angr_store_mem(state: angr.SimState, pageaddr: int, pagecontent: bytes) -> N
     except Exception as ex:
         print("Not mapping {:016x}: {}".format(pageaddr, ex))
     state.memory.store(pageaddr, pagecontent, size=len(pagecontent))
+    if hasattr(state, "ucf_mapped_addrs"):
+        state.ucf_mapped_addrs.add(pageaddr)
 
 
 class PageForwardingExplorer(angr.ExplorationTechnique):
@@ -70,7 +75,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
                 # Old news. This one is broken for good.
                 continue
             if isinstance(
-                r.error, angr.errors.SimEngineError
+                    r.error, angr.errors.SimEngineError
             ) and "No bytes in memory" in repr(r.error):
                 addr = s.solver.eval_one(s.regs.rip)
             elif isinstance(r.error, angr.errors.SimSegfaultException):
@@ -102,6 +107,10 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
 
 
 class AngrHarness(Harness):
+    """
+    Harness executing the stuff in Angr
+    """
+
     def angr_load_registers(self, uc: Uc, state: angr.SimState) -> None:
         """
         Load registers to angr
@@ -150,14 +159,53 @@ class AngrHarness(Harness):
         """
         super().__init__(config)
 
-    def angr_load_mapped_pages(self, uc: Uc, state: angr.SimState) -> None:
+    def angr_fetch_and_load(
+            self, state: angr.SimState, addr: int, length: Base = claripy.BVV(1, 32)
+    ) -> None:
+        """
+        Fetches and maps a page, or raises an error
+        :param state: the angr state
+        :param addr: addr to load
+        :param length: optional length if a larger range of mem should be fetched.
+        """
+        if not hasattr(state, "ucf_mapped_addrs"):
+            # TODO: recreating this map for every new state copy is super useless/slow.
+            # Maybe we can find another place to keep that data. Or even implement it somewhere else...
+            state.ucf_mapped_addrs = set()
+        try:
+            len_concrete = state.solver.eval(length)
+        except Exception as ex:
+            print(
+                "[!] Couldn't solve len for mem at 0x{:016x}: 0x{:0x16x} - falling back to len 1".format(
+                    addr, ex
+                )
+            )
+            len_concrete = 1
+        for sub_addr in range(addr, addr + len_concrete, self.config.PAGE_SIZE):
+            if self.get_base(sub_addr) in state.ucf_mapped_addrs:
+                return
+            print(
+                "[+] Fetching page for addr 0x{:016x} from `ucf attach`".format(
+                    sub_addr
+                )
+            )
+            base_addr, content = self.fetch_page_blocking(sub_addr)
+            angr_store_mem(state, base_addr, content)
+
+    def angr_load_mapped_pages(
+            self, uc: Uc, state: angr.SimState
+    ) -> List[Tuple[int, int, int]]:
         """
         Loads all currently mapped unicorn mem regions into angr
         :param uc: The uc instance to load from
         :param state: the angr instance to load to
+        :returns Lst of pages mapped
         """
+        mapped = []
         for begin, end, perms in uc.mem_regions():
+            mapped += (begin, end - begin + 1, perms)
             angr_store_mem(state, begin, bytes(uc.mem_read(begin, end - begin + 1)))
+        return mapped
 
     def get_angry(self, input_file: str) -> None:
         """
@@ -166,10 +214,19 @@ class AngrHarness(Harness):
         """
         # Instead of doing all the init routines again, we just init unicorn and fiddle out the contents from there.
         uc, pc, exits = self.uc_init(input_file, wait=True)  # type: Uc, int, List[int]
+        print("Starting angrification at 0x{:016x}".format(pc))
 
         base_addr, content = self.fetch_page_blocking(pc)
-        pagepath = self.path_for_page(pc)
 
+        # p = angr.project.load_shellcode(
+        #     content,
+        #     self.arch.angr_arch,
+        #     load_address=base_addr,
+        #     start_offset=pc - base_addr,
+        # )  # type: angr.Project
+
+        # In case project.load_shellcode performs well enough, we can drop these lines altogether
+        pagepath = self.path_for_page(pc)
         p = angr.Project(
             pagepath,
             load_options={
@@ -177,23 +234,43 @@ class AngrHarness(Harness):
                     "backend": "blob",
                     "base_addr": base_addr,
                     "arch": self.arch.angr_arch,
+                    "page_size": self.config.PAGE_SIZE
                 }
             },
         )
+        #  p.loader.memory._backers = []
+        # state.mem.add_backer
 
         state = p.factory.blank_state(
-            addr=self.uc_get_pc(uc),
+            addr=pc,
             add_options=angr.options.unicorn
-            | {
-                angr.options.REPLACEMENT_SOLVER,
-                angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS,
-            },
-        )
+                        | {angr.options.REPLACEMENT_SOLVER}
+                        | {angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
+            # memory_backer=None
+        )  # type: angr.SimState
+        state.ucf_mapped_addrs = set()
         self.angr_load_mapped_pages(uc, state)
         self.angr_load_registers(uc, state)
 
+        state.inspect.b(
+            "mem_read",
+            when=angr.BP_AFTER,
+            # state, state.inspect.address, state.inspect.mem_read_length
+            action=lambda x: self.angr_fetch_and_load(
+                x, x.inspect.mem_read_address, x.inspect.mem_read_length,
+            ),
+        )
+        state.inspect.b(
+            "mem_write",
+            when=angr.BP_AFTER,
+            action=lambda x: self.angr_fetch_and_load(
+                x, x.inspect.mem_write_address, x.inspect.mem_write_length
+            ),
+        )
+
         # s.solver.eval_one(s.regs.rdi)
         rdi = self.uc_reg_read(uc, "rdi")
+        base_addr, content = self.fetch_page_blocking(rdi)
         # pageaddr, content = utils.fetch_page_blocking(rdi)
 
         # state.memory.map_region(pageaddr, len(content), 7)
@@ -214,6 +291,8 @@ class AngrHarness(Harness):
         simgr.use_technique(angr.exploration_techniques.DFS())
         while simgr.active:
             print(simgr)
+            print(simgr.active)
+            print(simgr.errored)
             simgr.step()
 
         return

@@ -131,6 +131,19 @@ def fuzz(args: argparse.Namespace) -> None:
     os.system(run)
 
 
+def kernel_setup(args: argparse.Namespace) -> None:
+    """
+    Sets up the kernel options needed to run AFL.
+    """
+    ucf = Unicorefuzz(load_conf(args))
+    os.chdir(ucf.afl_path)
+    run = "./afl-system-config || exit 1"
+    if args.sudo:
+        run = "sudo " + run
+    print("[*] Setting AFL system conf")
+    os.system(run)
+
+
 # noinspection PyProtectedMember,PyDefaultArgument
 def create_subparser(
     subparsers: argparse._SubParsersAction,
@@ -230,6 +243,15 @@ if __name__ == "__main__":
 
     angr = create_subparser(
         subparsers, "angr", run_angr, aliases=["concolic"], uses_input=True
+    )
+
+    init_system = create_subparser(subparsers, "sysconf", kernel_setup)
+    init_system.add_argument(
+        "-S",
+        "--sudo",
+        default=False,
+        action="store_true",
+        help="Auto escalate privileges",
     )
 
     args = parser.parse_args()
