@@ -70,7 +70,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
                 # Old news. This one is broken for good.
                 continue
             if isinstance(
-                    r.error, angr.errors.SimEngineError
+                r.error, angr.errors.SimEngineError
             ) and "No bytes in memory" in repr(r.error):
                 addr = s.solver.eval_one(s.regs.rip)
             elif isinstance(r.error, angr.errors.SimSegfaultException):
@@ -96,7 +96,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
             simgr.errored.remove(r)
             simgr.active.append(r.state)
 
-        #simgr.stash(lambda r: r.state.pfe_fixed, from_stash="errored", to_stash="active")
+        # simgr.stash(lambda r: r.state.pfe_fixed, from_stash="errored", to_stash="active")
         # simgr.active.extend(new_active)
         return simgr
 
@@ -183,8 +183,11 @@ class AngrHarness(Harness):
 
         state = p.factory.blank_state(
             addr=self.uc_get_pc(uc),
-            add_options=angr.options.unicorn | {angr.options.REPLACEMENT_SOLVER,
-                                                angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
+            add_options=angr.options.unicorn
+            | {
+                angr.options.REPLACEMENT_SOLVER,
+                angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS,
+            },
         )
         self.angr_load_mapped_pages(uc, state)
         self.angr_load_registers(uc, state)

@@ -24,13 +24,13 @@ from unicorefuzz.x64utils import syscall_exit_hook
 
 
 def unicorn_debug_instruction(
-        uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
+    uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
 ) -> None:
     cs = user_data.cs  # type: Cs
     try:
         mem = uc.mem_read(address, size)
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-                bytes(mem), size
+            bytes(mem), size
         ):
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
     except Exception as e:
@@ -38,7 +38,7 @@ def unicorn_debug_instruction(
         print("e: {}".format(e))
         print("size={}".format(size))
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-                bytes(uc.mem_read(address, 30)), 30
+            bytes(uc.mem_read(address, 30)), 30
         ):
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
 
@@ -48,7 +48,7 @@ def unicorn_debug_block(uc: Uc, address: int, size: int, user_data: None) -> Non
 
 
 def unicorn_debug_mem_access(
-        uc: Uc, access: int, address: int, size: int, value: int, user_data: None
+    uc: Uc, access: int, address: int, size: int, value: int, user_data: None
 ) -> None:
     if access == UC_MEM_WRITE:
         print(
@@ -61,7 +61,7 @@ def unicorn_debug_mem_access(
 
 
 def unicorn_debug_mem_invalid_access(
-        uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
+    uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
     harness = user_data  # type Unicorefuzz
     print(
@@ -111,7 +111,7 @@ class Harness(Unicorefuzz):
             self.uc_run(uc, entry, exits[0])
 
     def uc_init(
-            self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
+        self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
     ) -> Tuple[Uc, int, List[int]]:
         """
         Initializes unicorn with the given params
@@ -259,8 +259,8 @@ class Harness(Unicorefuzz):
         """
         for filename in os.listdir(self.statedir):
             if (
-                    not filename.endswith(REJECTED_ENDING)
-                    and filename not in self.fetched_regs
+                not filename.endswith(REJECTED_ENDING)
+                and filename not in self.fetched_regs
             ):
                 try:
                     address = int(filename, 16)
