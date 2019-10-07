@@ -171,7 +171,7 @@ class Unicorefuzz:
         """
         base_address = self.get_base(address)
         return os.path.join(
-            self.config.workdir, "state", "{:016x}".format(base_address)
+            self.config.WORKDIR, "state", "{:016x}".format(base_address)
         )
 
     def exit(self, exitcode: int = 1) -> None:

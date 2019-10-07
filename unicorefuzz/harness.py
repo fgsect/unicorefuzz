@@ -24,13 +24,13 @@ from unicorefuzz.x64utils import syscall_exit_hook
 
 
 def unicorn_debug_instruction(
-    uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
+        uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
 ) -> None:
     cs = user_data.cs  # type: Cs
     try:
         mem = uc.mem_read(address, size)
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(mem), size
+                bytes(mem), size
         ):
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
     except Exception as e:
@@ -38,7 +38,7 @@ def unicorn_debug_instruction(
         print("e: {}".format(e))
         print("size={}".format(size))
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(uc.mem_read(address, 30)), 30
+                bytes(uc.mem_read(address, 30)), 30
         ):
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
 
@@ -48,7 +48,7 @@ def unicorn_debug_block(uc: Uc, address: int, size: int, user_data: None) -> Non
 
 
 def unicorn_debug_mem_access(
-    uc: Uc, access: int, address: int, size: int, value: int, user_data: None
+        uc: Uc, access: int, address: int, size: int, value: int, user_data: None
 ) -> None:
     if access == UC_MEM_WRITE:
         print(
@@ -61,7 +61,7 @@ def unicorn_debug_mem_access(
 
 
 def unicorn_debug_mem_invalid_access(
-    uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
+        uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
     harness = user_data  # type Unicorefuzz
     print(
@@ -111,7 +111,7 @@ class Harness(Unicorefuzz):
             self.uc_run(uc, entry, exits[0])
 
     def uc_init(
-        self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
+            self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
     ) -> Tuple[Uc, int, List[int]]:
         """
         Initializes unicorn with the given params
@@ -207,15 +207,19 @@ class Harness(Unicorefuzz):
 
         udbg = UnicornDbg()
 
+        # uddbg wants to know some mappings, read the current stat from unicorn to have $something...
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
+        mappings = [
+            (hex(start), start, (end - start + 1), perms)
+            for (start, end, perms) in uc.mem_regions()
+        ]
+
         udbg.initialize(
             emu_instance=uc,
             entry_point=entry_point,
             exit_point=exit_point,
             hide_binary_loader=True,
-            mappings=[
-                (hex(x), x, self.config.PAGE_SIZE) for x in self._mapped_page_cache
-            ],
+            mappings=mappings,
         )
 
         def dbg_except(x, y):
@@ -255,8 +259,8 @@ class Harness(Unicorefuzz):
         """
         for filename in os.listdir(self.statedir):
             if (
-                not filename.endswith(REJECTED_ENDING)
-                and filename not in self.fetched_regs
+                    not filename.endswith(REJECTED_ENDING)
+                    and filename not in self.fetched_regs
             ):
                 try:
                     address = int(filename, 16)
@@ -311,7 +315,7 @@ class Harness(Unicorefuzz):
                 # os.kill(os.getpid(), signal.SIGSEGV)
             if not os.path.isfile(dump_file_name):
                 open(input_file_name, "a").close()
-            print("mapping {}".format(hex(base_address)))
+            print("Requesting page 0x{:016x} from `ucf attach`".format(base_address))
             while 1:
                 try:
                     if os.path.isfile(dump_file_name + REJECTED_ENDING):
@@ -326,14 +330,13 @@ class Harness(Unicorefuzz):
                         return base_address, content
                 except IOError:
                     pass
-                except Exception as e:  # todo this shouldn't happen if we don't map like idiots
-                    print(e)
-                    print(
-                        "map_page_blocking failed: base address=0x{:016x}".format(
-                            base_address
-                        )
-                    )
-                    # exit(1)
+                # except Exception as e:  # todo this shouldn't happen if we don't map like idiots
+                #   print(e)
+                #   print(
+                #     "map_page_blocking failed: base address=0x{:016x}".format(
+                #         base_address
+                #     )
+                #   )
 
     def _fetch_register(self, name: str) -> int:
         """
@@ -410,6 +413,14 @@ class Harness(Unicorefuzz):
                     # print("Failed to retrieve register {}: {}".format(reg_name, ex))
                     pass
         return self.fetched_regs
+
+    def uc_get_pc(self, uc) -> int:
+        """
+        Gets the current pc from unicorn for this arch
+        :param uc: the unicorn instance
+        :return: value of the pc
+        """
+        return uc_get_pc(uc, self.arch)
 
 
 if __name__ == "__main__":

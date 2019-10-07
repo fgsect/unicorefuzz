@@ -6,6 +6,8 @@ from typing import Tuple, List, Callable
 
 from unicorn import Uc
 from unicorn.x86_const import (
+    UC_X86_REG_EAX,
+    UC_X86_REG_EDX,
     UC_X86_REG_RAX,
     UC_X86_REG_RDX,
     UC_X86_REG_RCX,

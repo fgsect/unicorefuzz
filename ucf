@@ -57,9 +57,7 @@ def run_angr(args: argparse.Namespace) -> None:
     Drop the memory in the angr harness and start concolic execution
     Former angr-harness.py
     """
-    AngrHarness(load_conf(args)).harness(
-        args.input_file, debug=args.debug, trace=args.trace, wait=args.wait
-    )
+    AngrHarness(load_conf(args)).get_angry(args.input_file)
 
 
 def wait_for_wrapper(args: argparse.Namespace, ucf: Unicorefuzz = None) -> None:

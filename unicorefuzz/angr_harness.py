@@ -8,16 +8,18 @@ from typing import Tuple, Callable, List
 
 import angr
 import claripy
-from avatar2.archs import X86, X86_64, ARM
+from angr.engines.vex.ccall import amd64g_check_ldmxcsr
+from angr.engines.vex.dirty import x86g_dirtyhelper_write_cr0
+from avatar2.archs import X86, X86_64, ARM, ARM_CORTEX_M3
 from unicorn import Uc
 
 from unicorefuzz.harness import Harness
 from unicorefuzz.unicorefuzz import uc_reg_const
 
-X86.angr_arch = angr.archinfo.arch_x86
-X86_64.angr_arch = angr.archinfo.arch_amd64
-ARM.angr_arch = angr.archinfo.arch_arm
-ARM.angr_arch = angr.archinfo.arch_arm
+X86.angr_arch = angr.archinfo.arch_x86.ArchX86
+X86_64.angr_arch = angr.archinfo.arch_amd64.ArchAMD64
+ARM.angr_arch = angr.archinfo.arch_arm.ArchARM
+ARM_CORTEX_M3.angr_arch = angr.archinfo.arch_arm.ArchARMCortexM
 
 
 def mark_input_symbolic(ucf: "AngrHarness", uc: Uc, state: angr.SimState, input):
@@ -42,7 +44,7 @@ def angr_store_mem(state: angr.SimState, pageaddr: int, pagecontent: bytes) -> N
         state.memory.map_region(pageaddr, len(pagecontent), 7)
     except Exception as ex:
         print("Not mapping {:016x}: {}".format(pageaddr, ex))
-    state.memory.store(pageaddr, pagecontent)
+    state.memory.store(pageaddr, pagecontent, size=len(pagecontent))
 
 
 class PageForwardingExplorer(angr.ExplorationTechnique):
@@ -60,11 +62,15 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
     def step(self, simgr: angr.SimulationManager, **kwargs) -> angr.SimulationManager:
         super().step(simgr, **kwargs)
         print(simgr)
-        new_active = []
+        fixed = []
         for r in simgr.errored:
             s = r.state
+            # first, check if we (PageForwardingExplorer) already touched this state...
+            if hasattr(s, "pfe_fixed") and not s.pfe_fixed:
+                # Old news. This one is broken for good.
+                continue
             if isinstance(
-                r.error, angr.errors.SimEngineError
+                    r.error, angr.errors.SimEngineError
             ) and "No bytes in memory" in repr(r.error):
                 addr = s.solver.eval_one(s.regs.rip)
             elif isinstance(r.error, angr.errors.SimSegfaultException):
@@ -75,13 +81,23 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
                 raise r.error.with_traceback(r.traceback)
 
             print("mapping addr: 0x{:016x}".format(addr))
-            pageaddr, pagecontent = self.page_fetcher(addr)
-            angr_store_mem(s, pageaddr, pagecontent)
-            s.memory.store(pageaddr, pagecontent)
-            new_active.append(s)
+            try:
+                pageaddr, pagecontent = self.page_fetcher(addr)
+                angr_store_mem(s, pageaddr, pagecontent)
+                s.memory.store(pageaddr, pagecontent)
+                s.pfe_fixed = True
+                fixed += [r]
+            except Exception as ex:
+                print("[*] Found erroring page 0x{:016x}: {}".format(addr, ex))
+                s.pfe_error = ex
+                s.pfe_fixed = False
 
-        simgr.drop(stash="errored")  # Todo: only remove fixed ones.
-        simgr.active.extend(new_active)
+        for r in fixed:
+            simgr.errored.remove(r)
+            simgr.active.append(r.state)
+
+        #simgr.stash(lambda r: r.state.pfe_fixed, from_stash="errored", to_stash="active")
+        # simgr.active.extend(new_active)
         return simgr
 
 
@@ -93,20 +109,39 @@ class AngrHarness(Harness):
         # Not using the fetched registers -> the init func could have changed regs.
         #  regs = self.fetch_all_regs()
         # for reg in state.arch.register_names.values():
-        angr_regs = state.arch.register_names.values()
+        angr_regs = dir(state.regs)  # state.regs. arch.register_names.values()
         unicorn_regs = self.arch.reg_names
-        angr_reg_set = set(angr_regs)
+
+        # These regs have either different names in angr or some special way to set them
+        if self.arch == X86:
+            angr_regs += ["cr0", "mxcsr"]
+        elif self.arch == X86_64:
+            angr_regs += ["cr0", "mxcsr", "fs_base", "gs_base"]
+        supported_regs = set(angr_regs)
 
         for reg in unicorn_regs:
-            if reg not in angr_reg_set:
-                print("Unicorn reg not supported in angr(?): %s".format(reg))
+            if reg not in supported_regs:
+                print("Unicorn reg not supported in angr(?): {}".format(reg))
             else:
-                try:
-                    state.registers.store(
-                        reg, uc.reg_read(uc_reg_const(self.arch, reg))
-                    )
-                except Exception as ex:
-                    print("Failed to retrieve register {}: {}".format(reg, ex))
+                name = reg
+                value = self.uc_reg_read(uc, reg)
+                if name == "mxcsr":
+                    # TODO: found this somewhere in angr's cgc sources. Probably wrong.
+                    state.regs.sseround = (value & 0x600) >> 9
+                    # alt solution, somewhere from deep inside angr's sources that looks good but crashes:
+                    # state.regs.sseround = amd64g_check_ldmxcsr(state, value)
+                elif name == "cr0":
+                    # Found this also somewhere, sets the state's archinfo according to cr0. Might work.
+                    # Other cr regs don't seem to be supported
+                    x86g_dirtyhelper_write_cr0(state, value)
+                else:
+                    # `fs_base` and `gs_base` are called `fs_const` and `gs_const` in angr...
+                    # Let's hope no other regs ever end on `_base` or this breaks ;)
+                    name = name.replace("_base", "_const")
+                    try:
+                        state.registers.store(name, value)
+                    except Exception as ex:
+                        print("Failed to retrieve register {}: {}".format(reg, ex))
 
     def __init__(self, config) -> None:
         """
@@ -122,7 +157,7 @@ class AngrHarness(Harness):
         :param state: the angr instance to load to
         """
         for begin, end, perms in uc.mem_regions():
-            angr_store_mem(state, begin, uc.mem_read(begin, end - begin))
+            angr_store_mem(state, begin, bytes(uc.mem_read(begin, end - begin + 1)))
 
     def get_angry(self, input_file: str) -> None:
         """
@@ -132,7 +167,7 @@ class AngrHarness(Harness):
         # Instead of doing all the init routines again, we just init unicorn and fiddle out the contents from there.
         uc, pc, exits = self.uc_init(input_file, wait=True)  # type: Uc, int, List[int]
 
-        self.fetch_page_blocking(pc)
+        base_addr, content = self.fetch_page_blocking(pc)
         pagepath = self.path_for_page(pc)
 
         p = angr.Project(
@@ -140,34 +175,34 @@ class AngrHarness(Harness):
             load_options={
                 "main_opts": {
                     "backend": "blob",
-                    "base_addr": pagepath,
+                    "base_addr": base_addr,
                     "arch": self.arch.angr_arch,
                 }
             },
         )
 
         state = p.factory.blank_state(
-            add_options=angr.options.unicorn | {angr.options.REPLACEMENT_SOLVER}
+            addr=self.uc_get_pc(uc),
+            add_options=angr.options.unicorn | {angr.options.REPLACEMENT_SOLVER,
+                                                angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
         )
-        self.angr_load_registers(uc, state)
         self.angr_load_mapped_pages(uc, state)
+        self.angr_load_registers(uc, state)
 
         # s.solver.eval_one(s.regs.rdi)
-        rdi = self.uc_reg_read("rdi")
+        rdi = self.uc_reg_read(uc, "rdi")
         # pageaddr, content = utils.fetch_page_blocking(rdi)
 
         # state.memory.map_region(pageaddr, len(content), 7)
         # state.memory.store(pageaddr, content)
 
-        # input_file = open(input_file, "rb")  # load afl's input
+        with open(input_file, "rb") as f:  # load afl's input
+            in_content = f.read()
 
-        input = input_file.read()
-        input_file.close()
+        input_symbolic = claripy.BVS("input", len(in_content) * 8)
 
-        input_symbolic = claripy.BVS("input", len(input) * 8)
-
-        state.preconstrainer.preconstrain(input, input_symbolic)
-        state.regs.rsi = len(input)
+        state.preconstrainer.preconstrain(in_content, input_symbolic)
+        state.regs.rsi = len(in_content)
 
         state.memory.store(rdi, input_symbolic)
 
