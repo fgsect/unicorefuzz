@@ -101,6 +101,18 @@ UNICOREFUZZ_SPEC = [
         "Relative location in the MODULE to break in",
     ),
     Optional(
+        "BREAK_FUNC_LIST",
+        Union[str, None], 
+        None, 
+        "A filename with list of functions to break at. VMLINUX needs to be set."),
+    Optional(
+        "VMLINUX",
+        Union[str, None],
+        None,
+        """Location of VMLINUX to be used for finding locations of functions. 
+        Needs to include debug symbols."""
+    ),
+    Optional(
         "EXITS", List[int], [], "Absolute addresses at which Ucf should stop fuzzing"
     ),
     Optional(

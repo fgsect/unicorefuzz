@@ -82,6 +82,8 @@ class ProbeWrapper(Unicorefuzz):
         module = self.config.MODULE
         breakoffset = self.config.BREAK_OFFSET
         breakaddress = self.config.BREAK_ADDR
+        breakfunclist = self.config.BREAK_FUNC_LIST
+        vmlinux = self.config.VMLINUX
         arch = self.arch
 
         if clear_state:
@@ -130,8 +132,14 @@ class ProbeWrapper(Unicorefuzz):
         print("[*] Initializing Avatar2")
         target = self.config.init_avatar_target(self, avatar)  # type: Target
 
-        target.set_breakpoint("*{}".format(breakaddress))
-        print("[+] Breakpoint set at {}".format(breakaddress))
+        if breakfunclist is not None and vmlinux is not None:
+            target.setfile(vmlinux)
+            with open(breakfunclist, 'rb') as f:
+                for line in f:
+                    target.set_breakpoint(line)
+        else:
+            target.set_breakpoint("*{}".format(breakaddress))
+            print("[+] Breakpoint set at {}".format(breakaddress))
         print("[*] Waiting for bp hit...")
         target.cont()
         target.wait()
