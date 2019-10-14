@@ -75,7 +75,7 @@ class PageForwardingExplorer(angr.ExplorationTechnique):
                 # Old news. This one is broken for good.
                 continue
             if isinstance(
-                    r.error, angr.errors.SimEngineError
+                r.error, angr.errors.SimEngineError
             ) and "No bytes in memory" in repr(r.error):
                 addr = s.solver.eval_one(s.regs.rip)
             elif isinstance(r.error, angr.errors.SimSegfaultException):
@@ -160,7 +160,7 @@ class AngrHarness(Harness):
         super().__init__(config)
 
     def angr_fetch_and_load(
-            self, state: angr.SimState, addr: int, length: Base = claripy.BVV(1, 32)
+        self, state: angr.SimState, addr: int, length: Base = claripy.BVV(1, 32)
     ) -> None:
         """
         Fetches and maps a page, or raises an error
@@ -193,7 +193,7 @@ class AngrHarness(Harness):
             angr_store_mem(state, base_addr, content)
 
     def angr_load_mapped_pages(
-            self, uc: Uc, state: angr.SimState
+        self, uc: Uc, state: angr.SimState
     ) -> List[Tuple[int, int, int]]:
         """
         Loads all currently mapped unicorn mem regions into angr
@@ -234,7 +234,7 @@ class AngrHarness(Harness):
                     "backend": "blob",
                     "base_addr": base_addr,
                     "arch": self.arch.angr_arch,
-                    "page_size": self.config.PAGE_SIZE
+                    "page_size": self.config.PAGE_SIZE,
                 }
             },
         )
@@ -244,8 +244,8 @@ class AngrHarness(Harness):
         state = p.factory.blank_state(
             addr=pc,
             add_options=angr.options.unicorn
-                        | {angr.options.REPLACEMENT_SOLVER}
-                        | {angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
+            | {angr.options.REPLACEMENT_SOLVER}
+            | {angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
             # memory_backer=None
         )  # type: angr.SimState
         state.ucf_mapped_addrs = set()
@@ -257,7 +257,7 @@ class AngrHarness(Harness):
             when=angr.BP_AFTER,
             # state, state.inspect.address, state.inspect.mem_read_length
             action=lambda x: self.angr_fetch_and_load(
-                x, x.inspect.mem_read_address, x.inspect.mem_read_length,
+                x, x.inspect.mem_read_address, x.inspect.mem_read_length
             ),
         )
         state.inspect.b(

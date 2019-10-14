@@ -210,7 +210,7 @@ class Harness(Unicorefuzz):
         # uddbg wants to know some mappings, read the current stat from unicorn to have $something...
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
         mappings = [
-            (hex(start), start, (end - start + 1), perms)
+            (hex(start), start, (end - start + 1))
             for (start, end, perms) in uc.mem_regions()
         ]
 
