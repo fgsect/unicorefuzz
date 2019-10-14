@@ -241,9 +241,10 @@ if __name__ == "__main__":
     sub_afl_path = create_subparser(subparsers, "afl-path", print_afl_path)
     sub_spec = create_subparser(subparsers, "spec", print_spec)
 
-    angr = create_subparser(
-        subparsers, "angr", run_angr, aliases=["concolic"], uses_input=True
-    )
+    # Not yet ready for prime time :(
+    # angr = create_subparser(
+    #    subparsers, "angr", run_angr, aliases=["concolic"], uses_input=True
+    # )
 
     init_system = create_subparser(subparsers, "sysconf", kernel_setup)
     init_system.add_argument(
