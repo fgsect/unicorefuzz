@@ -134,7 +134,7 @@ class ProbeWrapper(Unicorefuzz):
 
         if breakfunclist is not None and vmlinux is not None:
             target.setfile(vmlinux)
-            with open(breakfunclist, 'rb') as f:
+            with open(breakfunclist, "rb") as f:
                 for line in f:
                     target.set_breakpoint(line)
         else:
