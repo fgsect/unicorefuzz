@@ -114,7 +114,9 @@ def fuzz(args: argparse.Namespace) -> None:
 
     # AFL_COMPCONV_LEVEL=2 is an awesome addition to afl-unicorn, and definitely the one you want :)
     # See afl++ repo
-    env = "PATH={}:$PATH AFL_COMPCOV_LEVEL=2".format(ucf.afl_path)
+    env = "PATH={}:$PATH LIBUNICORN_PATH={} AFL_COMPCOV_LEVEL=2".format(
+        ucf.afl_path, ucf.libunicorn_path
+    )
     if args.print_outputs:
         env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
     run = "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t 4000+ {mode} -- python3 {ucf_main} emu @@ || exit 1".format(
