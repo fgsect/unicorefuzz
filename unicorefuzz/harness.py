@@ -3,6 +3,7 @@
 Main (Unicorn-)Harness, used alongside AFL.
 """
 import argparse
+import gc
 import os
 import sys
 import time
@@ -10,7 +11,6 @@ from typing import Optional, Tuple, Dict, List
 
 from capstone import Cs
 from unicorn import *
-from unicorn.x86_const import *
 
 from unicorefuzz import x64utils
 from unicorefuzz.unicorefuzz import (
@@ -102,6 +102,13 @@ class Harness(Unicorefuzz):
         :param debug: if we should enable unicorn debugger
         :param trace: trace or not
         """
+
+        # Exit without clean python vm shutdown:
+        # "The os._exit() function can be used if it is absolutely positively necessary to exit immediately"
+        # Many times faster!
+        # noinspection PyProtectedMember
+        exit_func = os._exit if not os.getenv("UCF_DEBUG_CLEAN_SHUTDOWN") else exit
+
         uc, entry, exits = self.uc_init(
             input_file, wait, trace, verbose=(debug or trace)
         )
@@ -109,6 +116,7 @@ class Harness(Unicorefuzz):
             self.uc_debug(uc, entry_point=entry, exit_point=exits[0])
         else:
             self.uc_run(uc, entry, exits[0])
+            exit_func(0)
 
     def uc_init(
         self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
@@ -161,6 +169,15 @@ class Harness(Unicorefuzz):
         # On error: map memory, add exits.
         uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
 
+        # import gc
+        # gc.collect()
+        if os.getenv("UCF_DEBUG_MEMORY"):
+            from pympler import muppy, summary
+
+            all_objects = muppy.get_objects()
+            sum1 = summary.summarize(all_objects)
+            summary.print_(sum1)
+
         # Last chance to hook before forkserver starts (if running as afl child)
         debug_sleep = os.getenv("UCF_DEBUG_SLEEP_BEFORE_FORK")
         if debug_sleep:
@@ -168,6 +185,9 @@ class Harness(Unicorefuzz):
                 "[d] Sleeping. Forkserver will start in {} seconds.".format(debug_sleep)
             )
             time.sleep(float(debug_sleep))
+
+        gc.collect()
+
         # starts the afl forkserver. Won't fork if afl is not around.
         self.uc_start_forkserver(uc, exits)
 
@@ -237,10 +257,6 @@ class Harness(Unicorefuzz):
                 )
             )
             self.force_crash(e)
-        # Exit without clean python vm shutdown:
-        # "The os._exit() function can be used if it is absolutely positively necessary to exit immediately"
-        # Many times faster!
-        os._exit(0)
 
     def map_known_mem(self, uc: Uc):
         """

@@ -78,15 +78,17 @@ archs = {
     "armbe": ARMBE,
 }
 
+
 # emulate from @begin, and stop when reaching address @until
 def uc_forkserver_init(uc: Uc, exits: List[int]) -> None:
     import ctypes
-    from unicorn import unicorn, UC_ERR_OK, UcError
+    from unicorn import unicorn
 
     exit_count = len(exits)
     unicorn._uc.uc_afl_forkserver_init(
         uc._uch, ctypes.c_size_t(exit_count), (ctypes.c_uint64 * exit_count)(*exits)
     )
+
 
 def regs_from_unicorn(arch: Architecture) -> List[str]:
     """

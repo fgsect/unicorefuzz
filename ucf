@@ -9,10 +9,8 @@ import os
 from typing import Any, Callable, Iterable
 
 from unicorefuzz import configspec
-from unicorefuzz.angr_harness import AngrHarness
 from unicorefuzz.configspec import serialize_spec, UNICOREFUZZ_SPEC
 from unicorefuzz.harness import Harness
-from unicorefuzz.probe_wrapper import ProbeWrapper
 from unicorefuzz.unicorefuzz import Unicorefuzz
 
 
@@ -51,6 +49,8 @@ def wrap_probe(args: argparse.Namespace) -> None:
     Attach, break and forward memory from target
     Former probewrapper.py
     """
+    from unicorefuzz.probe_wrapper import ProbeWrapper
+
     ProbeWrapper(load_conf(args)).wrap_gdb_target()
 
 
@@ -69,6 +69,8 @@ def run_angr(args: argparse.Namespace) -> None:
     Drop the memory in the angr harness and start concolic execution
     Former angr-harness.py
     """
+    from unicorefuzz.angr_harness import AngrHarness
+
     AngrHarness(load_conf(args)).get_angry(args.input_file)
 
 

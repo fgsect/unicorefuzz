@@ -9,6 +9,13 @@ We currently develop with backwards compatible python3 in mind.
 Functions may be annotated inline `dev like(this: str) -> None:`.
 However to annotate types, we prefer to add type comments (PEP something) `like = this # type: str`.
 
+## Profiling
+
+For speed, ucf kills the python vm with the internal `os._exit` instead of doing a clean `exit`.
+This, however, trips profiling tools.
+
+In case you want to run a profiler (or other biz), run ucf with `UCF_DEBUG_CLEAN_SHUTDOWN=1`.
+
 ## Debugging
 
 There are different layers to be debugged.
