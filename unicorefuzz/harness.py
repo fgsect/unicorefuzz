@@ -19,8 +19,8 @@ from unicorefuzz.unicorefuzz import (
     X64,
     uc_get_pc,
     uc_reg_const,
+    uc_forkserver_init,
 )
-from unicorefuzz.x64utils import syscall_exit_hook
 
 
 def unicorn_debug_instruction(
@@ -161,24 +161,15 @@ class Harness(Unicorefuzz):
         # On error: map memory, add exits.
         uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
 
-        if len(exits) > 1:
-            # unicorn supports a single exit only (using the length param).
-            # We'll path the binary on load if we have need to support more.
-            if self.arch == X64:
-                uc.hook_add(
-                    UC_HOOK_INSN,
-                    syscall_exit_hook,
-                    user_data=(exits, os._exit),
-                    arg1=UC_X86_INS_SYSCALL,
-                )
-            else:
-                # TODO: (Fast) solution for X86, ARM, ...
-                raise Exception(
-                    "Multiple exits not yet supported for arch {}".format(self.arch)
-                )
-
-        # starts the afl forkserver
-        self.uc_start_forkserver(uc)
+        # Last chance to hook before forkserver starts (if running as afl child)
+        debug_sleep = os.getenv("UCF_DEBUG_SLEEP_BEFORE_FORK")
+        if debug_sleep:
+            print(
+                "[d] Sleeping. Forkserver will start in {} seconds.".format(debug_sleep)
+            )
+            time.sleep(float(debug_sleep))
+        # starts the afl forkserver. Won't fork if afl is not around.
+        self.uc_start_forkserver(uc, exits)
 
         input_file = open(input_file, "rb")  # load afl's input
         input = input_file.read()
@@ -268,7 +259,7 @@ class Harness(Unicorefuzz):
                 except Exception:
                     pass
 
-    def uc_start_forkserver(self, uc: Uc):
+    def uc_start_forkserver(self, uc: Uc, exits: List[int]):
         """
         Starts the forkserver by executing an instruction on some scratch register
         :param uc: The unicorn to fork
@@ -297,6 +288,8 @@ class Harness(Unicorefuzz):
             uc.mem_map(scratch_addr, scratch_size)
             uc.mem_write(scratch_addr, arch.insn_nop)
             uc.emu_start(scratch_addr, until=0, count=1)
+
+        uc_forkserver_init(uc, exits)
 
     def _raise_if_reject(self, base_address: int, dump_file_name: str) -> None:
         """

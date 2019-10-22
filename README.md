@@ -123,7 +123,7 @@ It's generally a good idea to nop out kprintf or kernel printing functionality i
 
 ## Troubleshooting
 
-If you got trouble running unicorefuzz, follow these rulse, worst case feel free to reach out to us, for example to @domenuk on twitter.
+If you got trouble running unicorefuzz, follow these rulse, worst case feel free to reach out to us, for example to @domenuk on twitter. For some notes on debugging and developing ucf and afl-unicorn further, read [DEVELOPMENT.md](./DEVELOPMENT.md)
 
 ### No instrumentation
 

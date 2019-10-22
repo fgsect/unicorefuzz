@@ -16,7 +16,8 @@ from typing import (
 )  # other types are not supported, sorry...
 
 from avatar2 import Avatar, Target, X86
-from sh import which
+
+# from sh import which
 from unicorn import unicorn
 
 import unicorefuzz.unicorefuzz
@@ -112,22 +113,29 @@ UNICOREFUZZ_SPEC = [
     Optional(
         "WORKDIR",
         str,
-        os.path.join(os.getcwd(), "unicore_workdir"),
+        lambda config: os.path.join(config.folder, "unicore_workdir"),
         "Path to UCF workdir to store state etc.",
     ),
-    Optional("GDB_PATH", str, which("gdb"), "The path GDB lives at"),
+    Optional(
+        "GDB_PATH", str, "gdb", "The path GDB lives at"
+    ),  # which("gdb"), "The path GDB lives at"),
     Optional(
         "UNICORE_PATH",
         str,
-        os.path.dirname(os.path.abspath(os.path.join(unicorefuzz.__file__, ".."))),
+        os.path.dirname(os.path.dirname(os.path.abspath(unicorefuzz.__file__))),
         "Custom path of Unicore installation",
     ),
-    Required("AFL_INPUTS", str, "The seed directory to use for fuzzing"),
+    Optional(
+        "AFL_INPUTS",
+        Union[str, None],
+        lambda config: os.path.join(config.folder, "afl_inputs"),
+        "The seed directory to use for fuzzing",
+    ),
     Optional(
         "AFL_OUTPUTS",
         Union[str, None],
-        lambda config: os.path.join(config.UNICORE_PATH, "afl_output"),
-        "AFL output directory to use for fuzzing (default will be inside WORKDIR)",
+        lambda config: os.path.join(config.folder, "afl_outputs"),
+        "AFL output directory to use for fuzzing (default will be at location of config.py)",
     ),
     Optional("AFL_DICT", Union[str, None], None, "AFL dictionary to use for fuzzing"),
     Optional(
@@ -367,6 +375,11 @@ def load_config(path: str, silent: bool = False) -> ModuleType:
     """
     path = os.path.abspath(path)
     config = import_py("unicoreconfig", path, silent=silent)
+    # path of the actual config file
+    config.path = os.path.abspath(path)  # type: str
+    config.filename = os.path.basename(config.path)  # type: str
+    # config.folder is the folder containing the config
+    config.folder = os.path.dirname(config.path)  # type: str
     apply_spec(config, UNICOREFUZZ_SPEC, silent=silent)
     return config
 

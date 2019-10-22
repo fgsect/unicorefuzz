@@ -16,6 +16,17 @@ from unicorefuzz.probe_wrapper import ProbeWrapper
 from unicorefuzz.unicorefuzz import Unicorefuzz
 
 
+def getenv_default(envname: str, default: str) -> str:
+    """
+    Returns the environment variable if set, else returns the default
+    :param envname: name of env variable to get
+    :param default: what to return if envname is not set
+    :return env variable or default if not set
+    """
+    env = os.getenv(envname)
+    return env if env is not None else default
+
+
 def load_conf(args: argparse.Namespace, silent: bool = False) -> Any:
     """
     Loads the config from args
@@ -30,6 +41,7 @@ def load_conf(args: argparse.Namespace, silent: bool = False) -> Any:
 def print_spec(args: argparse.Namespace) -> None:
     """
     Outputs expected config.py spec.
+    :param args: the arguments
     """
     print(serialize_spec(UNICOREFUZZ_SPEC))
 
@@ -109,28 +121,62 @@ def fuzz(args: argparse.Namespace) -> None:
 
     wait_for_wrapper(args, ucf)
 
-    afl = os.path.join(ucf.afl_path, "afl-fuzz")
+    config_path = ucf.config.path
+
+    # Path to AFL: Should usually(tm) point to the AFLplusplus subrepo
+    afl_path = getenv_default("AFL_PATH", ucf.afl_path)
+    # Libunicorn_path: Unicorn allows us to switch out the native lib without reinstalling its python bindings.
+    libunicorn_path = getenv_default("LIBUNICORN_PATH", ucf.libunicorn_path)
+    # AFL_COMPCONV_LEVEL=2 is an awesome addition to afl-unicorn, and definitely the one you want :)
+    # See afl++ repo for further infos
+    afl_compcov_level = getenv_default("AFL_COMPCOV_LEVEL", "2")
+
+    # TODO: forward all additional parameters to AFL directly, instead.
+    afl_timeout = getenv_default("AFL_TIMEOUT", "4000+")
+
+    emu_params = ""
+    if args.trace:
+        if not args.print_outputs:
+            raise ValueError(
+                "Won't accept debug option -t without -P. Slowdown without benefit."
+            )
+        emu_params += "-t "
+
+    afl = os.path.join(afl_path, "afl-fuzz")
     ucf_main = os.path.join(ucf.config.UNICORE_PATH, "ucf")
 
-    # AFL_COMPCONV_LEVEL=2 is an awesome addition to afl-unicorn, and definitely the one you want :)
-    # See afl++ repo
-    env = "PATH={}:$PATH LIBUNICORN_PATH={} AFL_COMPCOV_LEVEL=2".format(
-        ucf.afl_path, ucf.libunicorn_path
+    if os.getenv("UCF_DEBUG_START_GDB"):
+        print("[d] UCF_DEBUG_START_GDB set. Starting GDB, raising AFL timeouts.")
+        afl_timeout = "99999999+"
+        afl = "{gdb} {afl} --args {afl}".format(gdb=ucf.config.GDB_PATH, afl=afl)
+
+    env = 'PATH="{}:$PATH" LIBUNICORN_PATH="{}" AFL_COMPCOV_LEVEL="{}"'.format(
+        afl_path, libunicorn_path, afl_compcov_level
     )
     if args.print_outputs:
         env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
-    run = "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t 4000+ {mode} -- python3 {ucf_main} emu @@ || exit 1".format(
-        env=env,
-        afl=afl,
-        afl_in=afl_inputs,
-        afl_out=ucf.config.AFL_OUTPUTS,
-        mode=mode,
-        id=id,
-        ucf_main=ucf_main,
+    run = (
+        "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t {afl_timeout} {mode} "
+        "-- python3 {ucf_main} emu {emu_params} -c {config_path} @@ || exit 1".format(
+            env=env,
+            afl=afl,
+            afl_in=afl_inputs,
+            afl_out=ucf.config.AFL_OUTPUTS,
+            afl_timeout=afl_timeout,
+            mode=mode,
+            id=id,
+            ucf_main=ucf_main,
+            emu_params=emu_params,
+            config_path=config_path,
+        )
     )
     if args.print_outputs:
         print("[*] Starting: ", run)
-    os.system(run)
+    if os.getenv("UCF_DEBUG_PRINT_COMMAND_ONLY"):
+        print("[d] ucf: Would execute:\n")
+        print(run)
+    else:
+        os.system(run)
 
 
 def kernel_setup(args: argparse.Namespace) -> None:
@@ -237,6 +283,13 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
         help="When fuzing, print all child output (for debug)",
+    )
+    sub_fuzz.add_argument(
+        "-t",
+        "--trace",
+        default=False,
+        action="store_true",
+        help="Enables debug tracing for children. Slow. Only useful with -P.",
     )
 
     sub_await = create_subparser(subparsers, "await", wait_for_wrapper)
