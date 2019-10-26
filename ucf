@@ -4,6 +4,11 @@ The main file of unicorefuzz.
 This parses the config and provides all the commandline functionality.
 """
 
+from unicornafl import monkeypatch
+
+# Just make sure nothing ever loads an unpatched unicorn in our domain :)
+monkeypatch()
+
 import argparse
 import os
 from typing import Any, Callable, Iterable

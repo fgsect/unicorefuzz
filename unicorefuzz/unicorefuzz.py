@@ -12,7 +12,7 @@ from avatar2.archs import Architecture
 from avatar2.archs.arm import ARM
 from avatar2.archs.x86 import X86
 from capstone import Cs
-from unicorn import (
+from unicornafl import (
     UC_ERR_READ_UNMAPPED,
     UC_ERR_READ_PROT,
     UC_ERR_READ_UNALIGNED,
@@ -67,6 +67,10 @@ X86.ignored_regs = ["cr0"]  # CR0 unicorn crash
 X86.insn_nop = b"\x90"
 X64.ignored_regs = X86.ignored_regs + ["fs", "gs"]  # crashes unicorn too
 
+# base_base = X86.unicorn_consts.UC_X86_REG_MXCSR
+# x86_const.UC_X86_REG_GS_BASE = base_base + 1
+# x86_const.UC_X86_REG_FS_BASE = base_base + 2
+
 # TODO: Add mips? ARM64? More archs?
 archs = {
     "x86": X86,
@@ -80,14 +84,14 @@ archs = {
 
 
 # emulate from @begin, and stop when reaching address @until
-def uc_forkserver_init(uc: Uc, exits: List[int]) -> None:
-    import ctypes
-    from unicorn import unicorn
+# def uc_forkserver_start(uc: Uc, exits: List[int]) -> None:
+# import ctypes
+# from unicornafl import unicorn
 
-    exit_count = len(exits)
-    unicorn._uc.uc_afl_forkserver_init(
-        uc._uch, ctypes.c_size_t(exit_count), (ctypes.c_uint64 * exit_count)(*exits)
-    )
+# exit_count = len(exits)
+# unicorn._uc.uc_afl_forkserver_start(
+#    uc._uch, ctypes.c_size_t(exit_count), (ctypes.c_uint64 * exit_count)(*exits)
+# )
 
 
 def regs_from_unicorn(arch: Architecture) -> List[str]:
@@ -101,9 +105,9 @@ def regs_from_unicorn(arch: Architecture) -> List[str]:
         for k, v in consts.__dict__.items()
         if not k.startswith("__") and "_REG_" in k and "INVALID" not in k
     ]
-    if arch == X64:
-        # These two are not directly supported by unicorn.
-        regs += ["gs_base", "fs_base"]
+    # if arch == X64:
+    # These two are not directly supported by unicorn.
+    # regs += ["gs_base", "fs_base"]
     return regs
 
 
@@ -160,8 +164,8 @@ class Unicorefuzz:
         self.requestdir = os.path.join(config.WORKDIR, "requests")  # type: str
 
         self.exits = None  # type: Optional[List[int]]
-        # if exits is still None when we map a page, store pages that we still need to patch later.
-        self._deferred_exits = []  # type: List[int]
+        # fore some things like the fuzz child we want to disable logging, In this case, we set should_log to False.
+        self.should_log = True  # type: bool
 
     def wait_for_probe_wrapper(self) -> None:
         """
@@ -234,41 +238,6 @@ class Unicorefuzz:
         """
         print(self.serialize_spec())
 
-    def set_exits(self, uc: Uc, base_address: int, exits: List[int]) -> None:
-        """
-        We replace all hooks and exits with syscalls since they should be rare in kernel code.
-        Then, when we encounter a syscall, we figure out if a syscall or exit occurred.
-        This can also be used to add additional hooks in the future.
-        :param uc: Unicorn instance
-        :param exits: The exit counts
-        :param base_address: the address we're mapping
-        """
-        arch = self.arch
-        # TODO: This only works for X64!
-        if exits is None:
-            self._deferred_exits.append(base_address)
-        else:
-            if len(exits) <= 1:
-                # No need to patch anything, uc supports a single exit.
-                return
-            if len(exits) > 1:
-                if arch == X64:
-                    for end_addr in exits:
-                        if self.get_base(end_addr) == base_address:
-                            print("[*] Setting exit 0x{:016x}".format(end_addr))
-                            # Abusing the syscall opcode for exits.
-                            # Just make sure the whole opcode will fit here by trying to map the end addr.
-                            self.map_page(uc, end_addr + len(x64utils.SYSCALL_OPCODE))
-                            uc.mem_write(end_addr, x64utils.SYSCALL_OPCODE)
-                else:
-                    raise (
-                        ValueError(
-                            "Multiple exits are not yet supported for arch {} - {}".format(
-                                arch, exits
-                            )
-                        )
-                    )
-
     def map_page(self, uc: Uc, addr: int) -> None:
         """
         Maps a page at addr in the harness, asking probe_wrapper.
@@ -285,7 +254,7 @@ class Unicorefuzz:
                 os.kill(os.getpid(), signal.SIGSEGV)
             if not os.path.isfile(dump_file_name):
                 open(input_file_name, "a").close()
-            print("mapping {}".format(hex(base_address)))
+            if self.should_log: print("mapping {}".format(hex(base_address)))
             while 1:
                 try:
                     if os.path.isfile(dump_file_name + REJECTED_ENDING):
@@ -299,7 +268,6 @@ class Unicorefuzz:
                         self._mapped_page_cache[base_address] = content
                         uc.mem_map(base_address, len(content))
                         uc.mem_write(base_address, content)
-                        self.set_exits(uc, base_address, self.exits)
                         return
                 except IOError:
                     pass

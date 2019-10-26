@@ -4,8 +4,8 @@ Mostly using x64 for x86_64 since everybody knows what we mean and it's more con
 """
 from typing import Tuple, List, Callable
 
-from unicorn import Uc
-from unicorn.x86_const import (
+from unicornafl import Uc
+from unicornafl.x86_const import (
     UC_X86_REG_EAX,
     UC_X86_REG_EDX,
     UC_X86_REG_RAX,

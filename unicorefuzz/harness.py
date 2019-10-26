@@ -10,7 +10,7 @@ import time
 from typing import Optional, Tuple, Dict, List
 
 from capstone import Cs
-from unicorn import *
+from unicornafl import *
 
 from unicorefuzz import x64utils
 from unicorefuzz.unicorefuzz import (
@@ -19,7 +19,6 @@ from unicorefuzz.unicorefuzz import (
     X64,
     uc_get_pc,
     uc_reg_const,
-    uc_forkserver_init,
 )
 
 
@@ -32,14 +31,12 @@ def unicorn_debug_instruction(
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
             bytes(mem), size
         ):
-            print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
+            if user_data.should_log: print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
     except Exception as e:
         print(hex(address))
         print("e: {}".format(e))
         print("size={}".format(size))
-        for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(uc.mem_read(address, 30)), 30
-        ):
+        for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(bytes(uc.mem_read(address, 30)), 30): 
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
 
 
@@ -64,19 +61,19 @@ def unicorn_debug_mem_invalid_access(
     uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
     harness = user_data  # type Unicorefuzz
-    print(
-        "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={})".format(
-            uc, access, address, size, value, user_data
+    if user_data.should_log: print(
+        "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={}, afl_child={})".format(
+            uc, access, address, size, value, user_data, user_data.is_afl_child
         )
     )
     if access == UC_MEM_WRITE_UNMAPPED:
-        print(
+        if user_data.should_log: print(
             "        >>> INVALID Write: addr=0x{:016x} size={} data=0x{:016x}".format(
                 address, size, value
             )
         )
     else:
-        print("        >>> INVALID Read: addr=0x{:016x} size={}".format(address, size))
+        if user_data.should_log: print("        >>> INVALID Read: addr=0x{:016x} size={}".format(address, size))
     try:
         harness.map_page(uc, address)
     except KeyboardInterrupt:
@@ -93,6 +90,8 @@ class Harness(Unicorefuzz):
     def __init__(self, config) -> None:
         super().__init__(config)
         self.fetched_regs = None  # type: Optional[Dict[str, int]]
+        # Will be set to true if we are a afl-forkser child.
+        self.is_afl_child = False  # type: bool
 
     def harness(self, input_file: str, wait: bool, debug: bool, trace: bool) -> None:
         """
@@ -108,6 +107,16 @@ class Harness(Unicorefuzz):
         # Many times faster!
         # noinspection PyProtectedMember
         exit_func = os._exit if not os.getenv("UCF_DEBUG_CLEAN_SHUTDOWN") else exit
+
+        # In case we need an easy way to debug mem loads etc.
+        init_sleep = os.getenv("UCF_DEBUG_SLEEP_BEFORE_INIT")
+        if init_sleep:
+            print(
+                "[d] Sleeping. Unicorn init will start in {} seconds.".format(
+                    init_sleep
+                )
+            )
+            time.sleep(float(init_sleep))
 
         uc, entry, exits = self.uc_init(
             input_file, wait, trace, verbose=(debug or trace)
@@ -155,11 +164,9 @@ class Harness(Unicorefuzz):
 
         # get pc from unicorn state since init_func may have altered it.
         pc = uc_get_pc(uc, self.arch)
-        exits = self.calculate_exits(pc)
-        # mappings used in init_func didn't have the pc yet.
-        for ex in self._deferred_exits:
-            self.set_exits(uc, ex, exits)
         self.map_known_mem(uc)
+
+        exits = self.calculate_exits(pc)
         if not exits:
             raise ValueError(
                 "No exits founds. Would run forever... Please set an exit address in config.py."
@@ -169,8 +176,6 @@ class Harness(Unicorefuzz):
         # On error: map memory, add exits.
         uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
 
-        # import gc
-        # gc.collect()
         if os.getenv("UCF_DEBUG_MEMORY"):
             from pympler import muppy, summary
 
@@ -178,22 +183,24 @@ class Harness(Unicorefuzz):
             sum1 = summary.summarize(all_objects)
             summary.print_(sum1)
 
-        # Last chance to hook before forkserver starts (if running as afl child)
-        debug_sleep = os.getenv("UCF_DEBUG_SLEEP_BEFORE_FORK")
-        if debug_sleep:
-            print(
-                "[d] Sleeping. Forkserver will start in {} seconds.".format(debug_sleep)
-            )
-            time.sleep(float(debug_sleep))
+        # no need to print if wer're muted
+        child_should_print = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
 
-        gc.collect()
+        # Last chance to hook before forkserver starts (if running as afl child)
+        fork_sleep = os.getenv("UCF_DEBUG_SLEEP_BEFORE_FORK")
+        if fork_sleep:
+            print(
+                "[d] Sleeping. Forkserver will start in {} seconds.".format(fork_sleep)
+            )
+            time.sleep(float(fork_sleep))
 
         # starts the afl forkserver. Won't fork if afl is not around.
-        self.uc_start_forkserver(uc, exits)
+        afl_available = uc.afl_forkserver_start(exits)
 
-        input_file = open(input_file, "rb")  # load afl's input
-        input = input_file.read()
-        input_file.close()
+        self.should_log = child_should_print or not afl_available 
+
+        with open(input_file, "rb") as f:  # load afl's input
+            input = f.read()
 
         try:
             config.place_input(self, uc, input)
@@ -275,38 +282,6 @@ class Harness(Unicorefuzz):
                 except Exception:
                     pass
 
-    def uc_start_forkserver(self, uc: Uc, exits: List[int]):
-        """
-        Starts the forkserver by executing an instruction on some scratch register
-        :param uc: The unicorn to fork
-        """
-        scratch_addr = self.config.SCRATCH_ADDR
-        scratch_size = self.config.SCRATCH_SIZE
-        arch = self.arch
-
-        sys.stdout.flush()  # otherwise children will inherit the unflushed buffer
-        uc.mem_map(scratch_addr, scratch_size)
-
-        if self.arch == X64:
-            # prepare to do base register things
-            regs = self.fetch_all_regs()
-            gs_base = regs["gs_base"]
-            fs_base = regs["fs_base"]
-
-            # This will execute code -> starts afl-unicorn forkserver!
-            x64utils.set_gs_base(uc, scratch_addr, gs_base)
-            # print("[d] setting gs_base to "+hex(gs))
-            x64utils.set_fs_base(uc, scratch_addr, fs_base)
-            # print("[d] setting fs_base to "+hex(gs))
-        else:
-            # We still need to start the forkserver somehow to be consistent.
-            # Let's emulate a nop for this.
-            uc.mem_map(scratch_addr, scratch_size)
-            uc.mem_write(scratch_addr, arch.insn_nop)
-            uc.emu_start(scratch_addr, until=0, count=1)
-
-        uc_forkserver_init(uc, exits)
-
     def _raise_if_reject(self, base_address: int, dump_file_name: str) -> None:
         """
         If dump_file_name + REJECTED_ENDING exists, raises exception
@@ -338,7 +313,7 @@ class Harness(Unicorefuzz):
             # Creating the input file == request
             if not os.path.isfile(dump_file_name):
                 open(input_file_name, "a").close()
-            print("Requesting page 0x{:016x} from `ucf attach`".format(base_address))
+            if self.should_log: print("Requesting page 0x{:016x} from `ucf attach`".format(base_address))
             while 1:
                 self._raise_if_reject(base_address, dump_file_name)
                 try:
@@ -369,7 +344,7 @@ class Harness(Unicorefuzz):
         regs = self.fetch_all_regs()
         for key, value in regs.items():
             if key in self.arch.ignored_regs:
-                # print("[d] Ignoring reg: {} (Ignored)".format(r))
+                # print("[d] Ignoring reg: {} (Ignored)".format(key))
                 continue
             try:
                 uc.reg_write(uc_reg_const(self.arch, key), value)
@@ -394,12 +369,12 @@ class Harness(Unicorefuzz):
         :return: register content
         """
         reg_name = reg_name.lower()
-        if reg_name == "fs_base":
-            return x64utils.get_fs_base(uc, self.config.SCRATCH_ADDR)
-        if reg_name == "gs_base":
-            return x64utils.get_gs_base(uc, self.config.SCRATCH_ADDR)
-        else:
-            return uc.reg_read(self.uc_reg_const(reg_name))
+        # if reg_name == "fs_base":
+        #    return x64utils.get_fs_base(uc, self.config.SCRATCH_ADDR)
+        # if reg_name == "gs_base":
+        #    return x64utils.get_gs_base(uc, self.config.SCRATCH_ADDR)
+        # else:
+        return uc.reg_read(self.uc_reg_const(reg_name))
 
     def uc_read_page(self, uc: Uc, addr: int) -> Tuple[int, bytes]:
         """
