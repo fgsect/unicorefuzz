@@ -111,7 +111,7 @@ def fuzz(args: argparse.Namespace) -> None:
         mode = "-M master"
     else:
         id = "fuzzer{}".format(id)
-        mode = "-S fuzzer{}".format(id)
+        mode = "-S {}".format(id)
     ucf = Unicorefuzz(load_conf(args))
 
     if restart:

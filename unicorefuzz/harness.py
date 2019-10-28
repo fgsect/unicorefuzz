@@ -175,6 +175,8 @@ class Harness(Unicorefuzz):
 
         # On error: map memory, add exits.
         uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
+        # Allocate a context struct for UCF reset later
+        context = uc.context_save()  # type: uc_context
 
         if os.getenv("UCF_DEBUG_MEMORY"):
             from pympler import muppy, summary
@@ -182,6 +184,7 @@ class Harness(Unicorefuzz):
             all_objects = muppy.get_objects()
             sum1 = summary.summarize(all_objects)
             summary.print_(sum1)
+
 
         # no need to print if wer're muted
         child_should_print = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
@@ -194,8 +197,10 @@ class Harness(Unicorefuzz):
             )
             time.sleep(float(fork_sleep))
 
+
         # starts the afl forkserver. Won't fork if afl is not around.
-        afl_available = uc.afl_forkserver_start(exits)
+        afl_available = uc.afl_forkserver_start(exits, persistent=True)
+        context = uc.context_update(context) 
 
         self.should_log = child_should_print or not afl_available 
 
@@ -208,7 +213,7 @@ class Harness(Unicorefuzz):
             raise Exception(
                 "[!] Error setting testcase for input {}: {}".format(input, ex)
             )
-        return uc, entry_point, exits
+        return uc, entry_point, exits, context
 
     def uc_debug(self, uc: Uc, entry_point: int, exit_point: int) -> None:
         """
