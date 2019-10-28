@@ -254,7 +254,8 @@ class Unicorefuzz:
                 os.kill(os.getpid(), signal.SIGSEGV)
             if not os.path.isfile(dump_file_name):
                 open(input_file_name, "a").close()
-            if self.should_log: print("mapping {}".format(hex(base_address)))
+            if self.should_log:
+                print("mapping {}".format(hex(base_address)))
             while 1:
                 try:
                     if os.path.isfile(dump_file_name + REJECTED_ENDING):

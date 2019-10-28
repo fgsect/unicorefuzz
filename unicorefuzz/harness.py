@@ -31,12 +31,19 @@ def unicorn_debug_instruction(
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
             bytes(mem), size
         ):
-            if user_data.should_log: print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
+            if user_data.should_log:
+                print(
+                    "    Instr: {:#016x}:\t{}\t{}".format(
+                        address, cs_mnemonic, cs_opstr
+                    )
+                )
     except Exception as e:
         print(hex(address))
         print("e: {}".format(e))
         print("size={}".format(size))
-        for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(bytes(uc.mem_read(address, 30)), 30): 
+        for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
+            bytes(uc.mem_read(address, 30)), 30
+        ):
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
 
 
@@ -61,19 +68,24 @@ def unicorn_debug_mem_invalid_access(
     uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
     harness = user_data  # type Unicorefuzz
-    if user_data.should_log: print(
-        "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={}, afl_child={})".format(
-            uc, access, address, size, value, user_data, user_data.is_afl_child
-        )
-    )
-    if access == UC_MEM_WRITE_UNMAPPED:
-        if user_data.should_log: print(
-            "        >>> INVALID Write: addr=0x{:016x} size={} data=0x{:016x}".format(
-                address, size, value
+    if user_data.should_log:
+        print(
+            "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={}, afl_child={})".format(
+                uc, access, address, size, value, user_data, user_data.is_afl_child
             )
         )
+    if access == UC_MEM_WRITE_UNMAPPED:
+        if user_data.should_log:
+            print(
+                "        >>> INVALID Write: addr=0x{:016x} size={} data=0x{:016x}".format(
+                    address, size, value
+                )
+            )
     else:
-        if user_data.should_log: print("        >>> INVALID Read: addr=0x{:016x} size={}".format(address, size))
+        if user_data.should_log:
+            print(
+                "        >>> INVALID Read: addr=0x{:016x} size={}".format(address, size)
+            )
     try:
         harness.map_page(uc, address)
     except KeyboardInterrupt:
@@ -185,7 +197,6 @@ class Harness(Unicorefuzz):
             sum1 = summary.summarize(all_objects)
             summary.print_(sum1)
 
-
         # no need to print if wer're muted
         child_should_print = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
 
@@ -197,12 +208,11 @@ class Harness(Unicorefuzz):
             )
             time.sleep(float(fork_sleep))
 
-
         # starts the afl forkserver. Won't fork if afl is not around.
         afl_available = uc.afl_forkserver_start(exits, persistent=True)
-        context = uc.context_update(context) 
+        context = uc.context_update(context)
 
-        self.should_log = child_should_print or not afl_available 
+        self.should_log = child_should_print or not afl_available
 
         with open(input_file, "rb") as f:  # load afl's input
             input = f.read()
@@ -318,7 +328,10 @@ class Harness(Unicorefuzz):
             # Creating the input file == request
             if not os.path.isfile(dump_file_name):
                 open(input_file_name, "a").close()
-            if self.should_log: print("Requesting page 0x{:016x} from `ucf attach`".format(base_address))
+            if self.should_log:
+                print(
+                    "Requesting page 0x{:016x} from `ucf attach`".format(base_address)
+                )
             while 1:
                 self._raise_if_reject(base_address, dump_file_name)
                 try:

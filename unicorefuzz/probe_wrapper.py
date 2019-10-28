@@ -39,9 +39,20 @@ class ProbeWrapper(Unicorefuzz):
         :param output_path: the path to output pages to
         """
         filenames = os.listdir(requests_path)
+        ignored = []  # type: List[str]
         while len(filenames):
             for filename in filenames:
-                base_address = self.get_base(int(filename, 16))
+                if filename.startswith(".") or filename in ignored:
+                    # we don't want to fetch hidden or broken files.
+                    continue
+                try:
+                    base_address = self.get_base(int(filename, 16))
+                except ValueError as ex:
+                    print(
+                        "[+] {}: Illegal request file found: {}".format(
+                            datetime.now(), filename
+                        )
+                    )
                 try:
                     print(
                         "[+] {}: Received request for 0x{:016x}".format(
