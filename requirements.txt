@@ -1,6 +1,5 @@
 avatar2
 capstone
-unicorn
 sh
 inotify
 angr

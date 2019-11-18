@@ -162,6 +162,9 @@ def fuzz(args: argparse.Namespace) -> None:
     )
     if args.print_outputs:
         env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
+    if args.yolo:
+        env = "{} AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 ".format(env)
+
     run = (
         "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t {afl_timeout} {mode} "
         "-- python3 {ucf_main} emu {emu_params} -c {config_path} @@ || exit 1".format(
@@ -297,6 +300,13 @@ if __name__ == "__main__":
         default=False,
         action="store_true",
         help="Enables debug tracing for children. Slow. Only useful with -P.",
+    )
+    sub_fuzz.add_argument(
+        "-y",
+        "--yolo",
+        default=False,
+        action="store_true",
+        help="Ignore OS settings for coredump notifications and governor. Prefer to run `ucf sysconf -S` and not set this flag.",
     )
 
     sub_await = create_subparser(subparsers, "await", wait_for_wrapper)

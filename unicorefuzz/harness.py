@@ -21,6 +21,8 @@ from unicorefuzz.unicorefuzz import (
     uc_reg_const,
 )
 
+# no need to print if we're muted
+CHILD_SHOULD_PRINT = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
 
 def unicorn_debug_instruction(
     uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
@@ -31,7 +33,7 @@ def unicorn_debug_instruction(
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
             bytes(mem), size
         ):
-            if user_data.should_log:
+            if CHILD_SHOULD_PRINT:
                 print(
                     "    Instr: {:#016x}:\t{}\t{}".format(
                         address, cs_mnemonic, cs_opstr
@@ -68,21 +70,21 @@ def unicorn_debug_mem_invalid_access(
     uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
     harness = user_data  # type Unicorefuzz
-    if user_data.should_log:
+    if CHILD_SHOULD_PRINT:
         print(
             "unicorn_debug_mem_invalid_access(uc={}, access={}, addr=0x{:016x}, size={}, value={}, ud={}, afl_child={})".format(
                 uc, access, address, size, value, user_data, user_data.is_afl_child
             )
         )
     if access == UC_MEM_WRITE_UNMAPPED:
-        if user_data.should_log:
+        if CHILD_SHOULD_PRINT:
             print(
                 "        >>> INVALID Write: addr=0x{:016x} size={} data=0x{:016x}".format(
                     address, size, value
                 )
             )
     else:
-        if user_data.should_log:
+        if CHILD_SHOULD_PRINT:
             print(
                 "        >>> INVALID Read: addr=0x{:016x} size={}".format(address, size)
             )
@@ -134,10 +136,14 @@ class Harness(Unicorefuzz):
             input_file, wait, trace, verbose=(debug or trace)
         )
         if debug:
-            self.uc_debug(uc, entry_point=entry, exit_point=exits[0])
+            self.uc_debug(uc, input_file, exits)
+            print("[*] Debugger finished :)")
         else:
-            self.uc_run(uc, entry, exits[0])
-            exit_func(0)
+            self.uc_fuzz(uc, input_file, exits)
+            if self.uc(uc):
+                print("[*] Done fuzzing. Cya.")
+            else:
+                print("[*] Done running once without AFL.")
 
     def uc_init(
         self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
@@ -183,12 +189,9 @@ class Harness(Unicorefuzz):
             raise ValueError(
                 "No exits founds. Would run forever... Please set an exit address in config.py."
             )
-        entry_point = pc
 
         # On error: map memory, add exits.
         uc.hook_add(UC_HOOK_MEM_UNMAPPED, unicorn_debug_mem_invalid_access, self)
-        # Allocate a context struct for UCF reset later
-        context = uc.context_save()  # type: uc_context
 
         if os.getenv("UCF_DEBUG_MEMORY"):
             from pympler import muppy, summary
@@ -196,9 +199,6 @@ class Harness(Unicorefuzz):
             all_objects = muppy.get_objects()
             sum1 = summary.summarize(all_objects)
             summary.print_(sum1)
-
-        # no need to print if wer're muted
-        child_should_print = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
 
         # Last chance to hook before forkserver starts (if running as afl child)
         fork_sleep = os.getenv("UCF_DEBUG_SLEEP_BEFORE_FORK")
@@ -208,24 +208,9 @@ class Harness(Unicorefuzz):
             )
             time.sleep(float(fork_sleep))
 
-        # starts the afl forkserver. Won't fork if afl is not around.
-        afl_available = uc.afl_forkserver_start(exits, persistent=True)
-        context = uc.context_update(context)
+        return uc, pc, exits
 
-        self.should_log = child_should_print or not afl_available
-
-        with open(input_file, "rb") as f:  # load afl's input
-            input = f.read()
-
-        try:
-            config.place_input(self, uc, input)
-        except Exception as ex:
-            raise Exception(
-                "[!] Error setting testcase for input {}: {}".format(input, ex)
-            )
-        return uc, entry_point, exits, context
-
-    def uc_debug(self, uc: Uc, entry_point: int, exit_point: int) -> None:
+    def uc_debug(self, uc: Uc, input_file: str, exits: List[int]) -> None:
         """
         Start uDdbg debugger for the given unicorn instance
         :param uc: The unicorn instance
@@ -239,6 +224,23 @@ class Harness(Unicorefuzz):
         from udbg import UnicornDbg
 
         udbg = UnicornDbg()
+
+        # The afl_forkserver_start() method sets the exits correctly.
+        # We don't want to actually fork, though, so make sure that return is False.
+        if uc.afl_forkserver_start(exits):
+            raise Exception("Debugger cannot run in AFL! Did you mean -t instead of -d?")
+
+        with open(input_file, "rb") as f:  # load AFL's input
+            input = f.read()
+        try:
+            self.config.place_input(self, uc, input)
+        except Exception as ex:
+            raise Exception(
+                "[!] Error setting testcase for input {}: {}".format(input, ex)
+            )
+
+        entry_point = self.uc_get_pc(uc)
+        exit_point = self.exits[0]
 
         # uddbg wants to know some mappings, read the current stat from unicorn to have $something...
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
@@ -263,7 +265,7 @@ class Harness(Unicorefuzz):
         # TODO will never reach done, probably.
         print("[*] Done.")
 
-    def uc_run(self, uc: Uc, entry_point: int, exit_point: int) -> None:
+    def uc_fuzz(self, uc: Uc, entry_point: int, exit_point: int) -> None:
         """
         Run initialized unicorn
         :param entry_point: The entry point
@@ -271,7 +273,7 @@ class Harness(Unicorefuzz):
         :param uc: The unicorn instance to run
         """
         try:
-            uc.emu_start(begin=entry_point, until=exit_point, timeout=0, count=0)
+            uc.afl_fuzz(begin=entry_point, until=exit_point, timeout=0, count=0)
         except UcError as e:
             print(
                 "[!] Execution failed with error: {} at address {:x}".format(

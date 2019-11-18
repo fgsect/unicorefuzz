@@ -5,7 +5,7 @@ Defines most functionality used by the harnesses.
 import os
 import signal
 import time
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from avatar2 import X86_64, ARM_CORTEX_M3, ARMV7M, ARMBE
 from avatar2.archs import Architecture
