@@ -24,6 +24,7 @@ from unicorefuzz.unicorefuzz import (
 # no need to print if we're muted
 CHILD_SHOULD_PRINT = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
 
+
 def unicorn_debug_instruction(
     uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
 ) -> None:
@@ -132,6 +133,11 @@ class Harness(Unicorefuzz):
             )
             time.sleep(float(init_sleep))
 
+        if debug or trace:
+            # TODO: Find a nicer way to do this :)
+            global CHILD_SHOULD_PRINT
+            CHILD_SHOULD_PRINT = True
+
         uc, entry, exits = self.uc_init(
             input_file, wait, trace, verbose=(debug or trace)
         )
@@ -139,11 +145,10 @@ class Harness(Unicorefuzz):
             self.uc_debug(uc, input_file, exits)
             print("[*] Debugger finished :)")
         else:
-            self.uc_fuzz(uc, input_file, exits)
-            if self.uc(uc):
+            if self.uc_fuzz(uc, input_file, exits):
                 print("[*] Done fuzzing. Cya.")
             else:
-                print("[*] Done running once without AFL.")
+                print("[*] Finished one run (without AFL).")
 
     def uc_init(
         self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
@@ -214,8 +219,8 @@ class Harness(Unicorefuzz):
         """
         Start uDdbg debugger for the given unicorn instance
         :param uc: The unicorn instance
-        :param entry_point: Where to start
-        :param exit_point: Exit point
+        :param input_file: The (afl)input file to read
+        :param exits: List of exits that end fuzzing
         """
         print("[*] Loading debugger...")
         sys.path.append(self.uddbg_path)
@@ -228,7 +233,9 @@ class Harness(Unicorefuzz):
         # The afl_forkserver_start() method sets the exits correctly.
         # We don't want to actually fork, though, so make sure that return is False.
         if uc.afl_forkserver_start(exits):
-            raise Exception("Debugger cannot run in AFL! Did you mean -t instead of -d?")
+            raise Exception(
+                "Debugger cannot run in AFL! Did you mean -t instead of -d?"
+            )
 
         with open(input_file, "rb") as f:  # load AFL's input
             input = f.read()
@@ -265,22 +272,41 @@ class Harness(Unicorefuzz):
         # TODO will never reach done, probably.
         print("[*] Done.")
 
-    def uc_fuzz(self, uc: Uc, entry_point: int, exit_point: int) -> None:
+    def uc_fuzz(self, uc: Uc, input_file: str, exits: List[int]) -> bool:
         """
         Run initialized unicorn
-        :param entry_point: The entry point
-        :param exit_point: First final address. Hack something to get more exits
-        :param uc: The unicorn instance to run
+        :param uc: the Unicorn instance  to work on
+        :param input_file: The afl input file
+        :param exits: List of exit addresses to end fuzzing at
+
+        :returns: True, if we're in the parent after fuzzing, False otherwise.
         """
+
+        def input_callback(uc: Uc, input: bytes, persistent_round: int, data: Harness):
+            # print("input", uc, input, persistent_round, data)
+            self.config.place_input(data, uc, input)
+
+        # def crash_callback(
+        #    uc: Uc, uc_ret: UcError, input: bytes, persistent_round: int, data: Harness
+        # ):
+        #   print("input", uc, uc_ret, input, persistent_round, data)
+        #   print("crashing", args)
+
         try:
-            uc.afl_fuzz(begin=entry_point, until=exit_point, timeout=0, count=0)
+            return uc.afl_fuzz(
+                input_file=input_file,
+                place_input_callback=input_callback,
+                exits=exits,
+                validate_crash_callback=None,  # TODO: self.crash_callback,
+                persistent_iters=1000,  # TODO self.config.PERSISTENT_ITERS,
+                data=self,
+            )
         except UcError as e:
             print(
                 "[!] Execution failed with error: {} at address {:x}".format(
                     e, uc_get_pc(uc, self.arch)
                 )
             )
-            self.force_crash(e)
 
     def map_known_mem(self, uc: Uc):
         """

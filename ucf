@@ -163,7 +163,9 @@ def fuzz(args: argparse.Namespace) -> None:
     if args.print_outputs:
         env = "{} AFL_DEBUG_CHILD_OUTPUT=1 ".format(env)
     if args.yolo:
-        env = "{} AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 ".format(env)
+        env = "{} AFL_NO_AFFINITY=1 AFL_SKIP_CPUFREQ=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 ".format(
+            env
+        )
 
     run = (
         "{env} {afl} -U -m none -i {afl_in} -o {afl_out} -t {afl_timeout} {mode} "
