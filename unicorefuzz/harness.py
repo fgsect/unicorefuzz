@@ -298,7 +298,7 @@ class Harness(Unicorefuzz):
                 place_input_callback=input_callback,
                 exits=exits,
                 validate_crash_callback=None,  # TODO: self.crash_callback,
-                persistent_iters=1000,  # TODO self.config.PERSISTENT_ITERS,
+                persistent_iters=1,  # TODO self.config.PERSISTENT_ITERS,
                 data=self,
             )
         except UcError as e:
@@ -456,42 +456,3 @@ class Harness(Unicorefuzz):
         :return: value of the pc
         """
         return uc_get_pc(uc, self.arch)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Test harness for our sample kernel module"
-    )
-    parser.add_argument(
-        "input_file",
-        type=str,
-        help="Path to the file containing the mutated input to load",
-    )
-    parser.add_argument(
-        "-c", "--config", type=str, default="config.py", help="The config file to use."
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        default=False,
-        action="store_true",
-        help="Starts the testcase in uUdbg (if installed)",
-    )
-    parser.add_argument(
-        "-t",
-        "--trace",
-        default=False,
-        action="store_true",
-        help="Enables debug tracing",
-    )
-    parser.add_argument(
-        "-w",
-        "--wait",
-        default=False,
-        action="store_true",
-        help="Wait for the state directory to be present",
-    )
-    args = parser.parse_args()
-
-    Harness(args.config)
-    Harness.harness(args.input_file, debug=args.debug, trace=args.trace, wait=args.wait)
