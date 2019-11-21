@@ -133,14 +133,6 @@ def uc_reg_const(arch: Architecture, reg_name: str) -> int:
     return getattr(arch.unicorn_consts, arch.unicorn_reg_tag + reg_name.upper())
 
 
-def uc_get_pc(uc: Uc, arch: Architecture) -> int:
-    """
-    Gets the current program counter from a unicorn instance
-    """
-    # noinspection PyUnresolvedReferences
-    return uc.reg_read(uc_reg_const(arch, arch.pc_name))
-
-
 def get_arch(archname: str) -> Architecture:
     """
     Look up Avatar architecture, add Ucf extras and return it

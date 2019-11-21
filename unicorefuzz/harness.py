@@ -17,7 +17,6 @@ from unicorefuzz.unicorefuzz import (
     Unicorefuzz,
     REJECTED_ENDING,
     X64,
-    uc_get_pc,
     uc_reg_const,
 )
 
@@ -26,13 +25,13 @@ CHILD_SHOULD_PRINT = os.getenv("AFL_DEBUG_CHILD_OUTPUT")
 
 
 def unicorn_debug_instruction(
-    uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
+        uc: Uc, address: int, size: int, user_data: "Unicorefuzz"
 ) -> None:
     cs = user_data.cs  # type: Cs
     try:
         mem = uc.mem_read(address, size)
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(mem), size
+                bytes(mem), size
         ):
             if CHILD_SHOULD_PRINT:
                 print(
@@ -45,7 +44,7 @@ def unicorn_debug_instruction(
         print("e: {}".format(e))
         print("size={}".format(size))
         for (cs_address, cs_size, cs_mnemonic, cs_opstr) in cs.disasm_lite(
-            bytes(uc.mem_read(address, 30)), 30
+                bytes(uc.mem_read(address, 30)), 30
         ):
             print("    Instr: {:#016x}:\t{}\t{}".format(address, cs_mnemonic, cs_opstr))
 
@@ -55,7 +54,7 @@ def unicorn_debug_block(uc: Uc, address: int, size: int, user_data: None) -> Non
 
 
 def unicorn_debug_mem_access(
-    uc: Uc, access: int, address: int, size: int, value: int, user_data: None
+        uc: Uc, access: int, address: int, size: int, value: int, user_data: None
 ) -> None:
     if access == UC_MEM_WRITE:
         print(
@@ -68,7 +67,7 @@ def unicorn_debug_mem_access(
 
 
 def unicorn_debug_mem_invalid_access(
-    uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
+        uc: Uc, access: int, address: int, size: int, value: int, user_data: "Harness"
 ):
     harness = user_data  # type Unicorefuzz
     if CHILD_SHOULD_PRINT:
@@ -151,7 +150,7 @@ class Harness(Unicorefuzz):
                 print("[*] Finished one run (without AFL).")
 
     def uc_init(
-        self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
+            self, input_file, wait: bool = False, trace: bool = False, verbose: bool = False
     ) -> Tuple[Uc, int, List[int]]:
         """
         Initializes unicorn with the given params
@@ -186,7 +185,7 @@ class Harness(Unicorefuzz):
         config.init_func(self, uc)
 
         # get pc from unicorn state since init_func may have altered it.
-        pc = uc_get_pc(uc, self.arch)
+        pc = self.uc_read_pc(uc)
         self.map_known_mem(uc)
 
         exits = self.calculate_exits(pc)
@@ -246,7 +245,7 @@ class Harness(Unicorefuzz):
                 "[!] Error setting testcase for input {}: {}".format(input, ex)
             )
 
-        entry_point = self.uc_get_pc(uc)
+        entry_point = self.uc_read_pc(uc)
         exit_point = self.exits[0]
 
         # uddbg wants to know some mappings, read the current stat from unicorn to have $something...
@@ -283,7 +282,7 @@ class Harness(Unicorefuzz):
         """
 
         def input_callback(uc: Uc, input: bytes, persistent_round: int, data: Harness):
-            # print("input", uc, input, persistent_round, data)
+            # We need to reset the entry point for persistence mode.
             self.config.place_input(data, uc, input)
 
         # def crash_callback(
@@ -298,13 +297,13 @@ class Harness(Unicorefuzz):
                 place_input_callback=input_callback,
                 exits=exits,
                 validate_crash_callback=None,  # TODO: self.crash_callback,
-                persistent_iters=1,  # TODO self.config.PERSISTENT_ITERS,
+                persistent_iters=1,  # TODO: Still needs some sort of reset between runs!
                 data=self,
             )
         except UcError as e:
             print(
                 "[!] Execution failed with error: {} at address {:x}".format(
-                    e, uc_get_pc(uc, self.arch)
+                    e, uc_read_pc(uc, self.arch)
                 )
             )
 
@@ -316,8 +315,8 @@ class Harness(Unicorefuzz):
         """
         for filename in os.listdir(self.statedir):
             if (
-                not filename.endswith(REJECTED_ENDING)
-                and filename not in self.fetched_regs
+                    not filename.endswith(REJECTED_ENDING)
+                    and filename not in self.fetched_regs
             ):
                 try:
                     address = int(filename, 16)
@@ -421,6 +420,22 @@ class Harness(Unicorefuzz):
         #    return x64utils.get_gs_base(uc, self.config.SCRATCH_ADDR)
         # else:
         return uc.reg_read(self.uc_reg_const(reg_name))
+    
+    def uc_reg_write(self, uc: Uc, reg_name: str, val: int) -> int:
+        """
+        Reads a register by name, resolving the UC const for the current architecture.
+        Handles potential special cases like base registers
+        :param uc: the unicorn instance to read the register from
+        :param reg_name: the register name
+        :param val: the register content
+        """
+        reg_name = reg_name.lower()
+        # if reg_name == "fs_base":
+        #    return x64utils.get_fs_base(uc, self.config.SCRATCH_ADDR)
+        # if reg_name == "gs_base":
+        #    return x64utils.get_gs_base(uc, self.config.SCRATCH_ADDR)
+        # else:
+        return uc.reg_write(self.uc_reg_const(reg_name), val)
 
     def uc_read_page(self, uc: Uc, addr: int) -> Tuple[int, bytes]:
         """
@@ -449,10 +464,20 @@ class Harness(Unicorefuzz):
                     pass
         return self.fetched_regs
 
-    def uc_get_pc(self, uc) -> int:
+    def uc_read_pc(self, uc) -> int:
         """
         Gets the current pc from unicorn for this arch
         :param uc: the unicorn instance
         :return: value of the pc
         """
-        return uc_get_pc(uc, self.arch)
+        # noinspection PyUnresolvedReferences
+        return uc.reg_read(uc_reg_const(self.arch, self.arch.pc_name))
+
+    def uc_write_pc(self, uc, val) -> int:
+        """
+        Sets the program counter of a unicorn instance
+        :param uc: Unicorn instance
+        :param arch: the architecture to use
+        :param val: the value to write
+        """
+        return uc.reg_write(uc_reg_const(self.arch, self.arch.pc_name), val)
