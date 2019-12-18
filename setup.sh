@@ -24,10 +24,10 @@ for i in wget python2 python3 automake autoconf sha384sum cmake; do
   fi
 done
 
-T=$(which pip3 2>/dev/null)
-if [ "$T" = "" ]; then
-    echo "[-] Error: Could not find pip3. Run 'sudo apt-get install python3-pip'"
-    exit 1
+python3 -m pip --version 1>/dev/null
+if [ ! $? -eq 0 ]; then
+  echo "[-] Error: Could not find pip3. Run 'sudo apt-get install python3-pip'"
+  exit 1
 fi
  
 if echo "$CC" | grep -qF /afl-; then
@@ -38,16 +38,10 @@ fi
 echo "[+] Installing python requirements" 
 if [ -z "$VIRTUAL_ENV" ]; then
   echo "[*] Info: Installing unicorefuzz to system python using --user"
-  pip3 install --user -r requirements.txt || exit 1
-  echo "[*] Uninstalling the 'normal' unicorn first, if installed."
-  pip3 uninstall -y unicorn
-  pip3 uninstall -y unicorn
+  python3 -m pip install --user -r requirements.txt || exit 1
 else
-  echo "[*] Info: Installing python unicorn to virtualenv: $VIRTUAL_ENV"
+  echo "[*] Info: Installing python requirements to virtualenv: $VIRTUAL_ENV"
   pip install -r requirements.txt || exit 1
-  echo "[*] Uninstalling the 'normal' unicorn first, if installed."
-  pip uninstall -y unicorn
-  pip uninstall -y unicorn
 fi
 echo "[*] All python deps have been installed."
 
@@ -84,8 +78,8 @@ then
   pip install --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
 else
   echo "[+] installing dependencies as user"
-  pip3 install --user prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate || exit 1
-  pip3 install --user --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
+  python3 -m pip install --user prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate || exit 1
+  python3 -m pip install --user --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
 fi
 echo "[*] Dependencies installed successfully."
 echo ""
