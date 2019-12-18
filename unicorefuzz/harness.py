@@ -303,7 +303,7 @@ class Harness(Unicorefuzz):
         except UcError as e:
             print(
                 "[!] Execution failed with error: {} at address {:x}".format(
-                    e, uc_read_pc(uc, self.arch)
+                    e, self.uc_read_pc(uc)
                 )
             )
 

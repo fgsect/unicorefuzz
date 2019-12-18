@@ -96,43 +96,23 @@ A few things to consider.
 
 ### FS\_BASE and GS\_BASE
 
-Unicorn does not offer a way to directly set model specific registers. Since kernels use them to store pointers to process- or cpu-specific memory, Unicorefuzz makes unicorn execute `wrmsr` to set the `fs` and `gs` registers to the appropriate values.
-To do this, you'll have to provide a non-used `SCRATCH_ADDR` in the `config.py`.
+Unicorn did not offer a way to directly set model specific registers directly.
+The forked unicornafl version of AFL++ finally supports it. Most ugly code of earlier versions was scrapped.
 
 ### Improve Fuzzing Speed
 
-Right now, the Unicorefuzz `ucf attach` harness needs to be manually restarted after an amount of pages has been allocated. Allocated pages don't propagate back to the forkserver parent automatically and would need be reloaded from disk for each iteration.
-
-### CMPXCHNG16b
-~~Unicorn does not [handle CMPXCHNG16b correctly](https://github.com/unicorn-engine/unicorn/issues/1095).
-Until that is addressed, we needed to hook each cmpxchng16b with a python reimplementation.
-This is super hacky and should only be used if really needed.
-Instead, try to start fuzzing after the instruction or do anything else.
-If you do need it, add all occurrences you want to replace to the `config.py`~~
-
-This issue seems to be resolved in the latest unicorn master branch. Unicornmode in AFL++ is based on a recent enough branch to work.
-
-### EXITS
-Exits on X64 use `syscall`, which is a 2 bytes instruction.
-Using it to overwrite `ret` might break the line after the return instruction, since `ret` is only a single byte.
-Instead, consider hooking the op before ret.
-Exits on X86 and ARM are not yet supported. We'll get there :)
+Right now, the Unicorefuzz `ucf attach` harness might need to be manually restarted after an amount of pages has been allocated. 
+Allocated pages should propagate back to the forkserver parent automatically but might still get reloaded from disk for each iteration.
 
 ### IO/Printthings
+
 It's generally a good idea to nop out kprintf or kernel printing functionality if possible, when the program is loaded into the emulator.
 
 ## Troubleshooting
 
 If you got trouble running unicorefuzz, follow these rulse, worst case feel free to reach out to us, for example to @domenuk on twitter. For some notes on debugging and developing ucf and afl-unicorn further, read [DEVELOPMENT.md](./DEVELOPMENT.md)
 
-### No instrumentation
-
-You probably have a installation of unicorn without AFL instumentation. You might have installed it via `pip` at some point.
-Make sure when running `ucf emu`, the loaded `libunicorn.so` matches the one in the unicorn folder inside aflplusplus.
-A common issue may be running the wrong python version... AFL++ installs AFL Unicorn for the system python by default.
-Unicorefuzz should(tm) work inside a virtualenv, in case nothing else helps.
-
-### Stil won't start
+### Just won't start
 
 Run the harness without afl (`ucf emu -t ./sometestcase`).
 Make sure you are not in a virtualenv or in the correct one.
