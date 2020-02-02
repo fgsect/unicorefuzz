@@ -60,7 +60,7 @@ chmod +x ./build_unicorn_support.sh || exit 1
 if [[ "$VIRTUAL_ENV" == "" ]]
 then
   echo "[+] Doublechecking we have AFL Unicorn in py3"
-  cd unicorn/bindings/python || exit 1
+  cd unicornafl/bindings/python || exit 1
   python3 setup.py install --user || exit 1
   cd ../../../ || exit 1
 fi
