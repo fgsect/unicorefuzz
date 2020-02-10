@@ -74,12 +74,10 @@ cd uDdbg || exit 1
 if [[ "$VIRTUAL_ENV" != "" ]]
 then
   echo "[+] installing dependencies in virtualenv"
-  pip install prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate || exit 1
-  pip install --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
+  pip install . || exit 1
 else
   echo "[+] installing dependencies as user"
-  python3 -m pip install --user prompt-toolkit inquirer termcolor capstone keystone hexdump keystone_engine tabulate || exit 1
-  python3 -m pip install --user --force-reinstall --ignore-installed --no-binary :all: keystone-engine || exit 1
+  python3 -m pip install --user . || exit 1
 fi
 echo "[*] Dependencies installed successfully."
 echo ""

@@ -222,8 +222,6 @@ class Harness(Unicorefuzz):
         :param exits: List of exits that end fuzzing
         """
         print("[*] Loading debugger...")
-        sys.path.append(self.uddbg_path)
-        print(sys.path)
         # noinspection PyUnresolvedReferences
         from udbg import UnicornDbg
 

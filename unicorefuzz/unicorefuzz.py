@@ -36,7 +36,6 @@ from unicorefuzz import x64utils, configspec
 
 AFL_PATH = "AFLplusplus"
 UNICORN_IN_AFL = os.path.join("unicorn_mode", "unicorn")
-UDDBG_PATH = "uDdbg"
 
 DEFAULT_PAGE_SIZE = 0x1000
 PROBE_WRAPPER_WAIT_SECS = 0.5
@@ -289,14 +288,6 @@ class Unicorefuzz:
         :return Whereever unicorn.so resides lives in the system
         """
         return os.path.abspath(os.path.join(self.afl_path, UNICORN_IN_AFL))
-
-    @property
-    def uddbg_path(self) -> str:
-        """
-        Calculate uDdbg path
-        :return: The folder uDdbg is cloned to
-        """
-        return os.path.abspath(os.path.join(self.config.UNICORE_PATH, UDDBG_PATH))
 
     def get_base(self, addr: int) -> int:
         """
