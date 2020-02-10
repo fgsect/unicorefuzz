@@ -79,6 +79,9 @@ else
   echo "[+] installing dependencies as user"
   python3 -m pip install --user . || exit 1
 fi
+
+cd .. || exit 1
+
 echo "[*] Dependencies installed successfully."
 echo ""
 echo "[*] To use AFL++ outside of unicorefuzz,"
