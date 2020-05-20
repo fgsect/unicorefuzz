@@ -229,7 +229,7 @@ class Harness(Unicorefuzz):
 
         # The afl_forkserver_start() method sets the exits correctly.
         # We don't want to actually fork, though, so make sure that return is False.
-        if uc.afl_forkserver_start(exits):
+        if uc.afl_forkserver_start(exits) != uc.UC_AFL_RET_NO_AFL:
             raise Exception(
                 "Debugger cannot run in AFL! Did you mean -t instead of -d?"
             )
