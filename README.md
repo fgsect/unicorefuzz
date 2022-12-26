@@ -99,6 +99,8 @@ A few things to consider.
 Unicorn did not offer a way to directly set model specific registers directly.
 The forked unicornafl version of AFL++ finally supports it. Most ugly code of earlier versions was scrapped.
 
+The $fs_base and $gs_base registers are available in gdb since version 8. If you're attaching to an older gdbserver version, unicorefuzz might not be able to read those registers.
+
 ### Improve Fuzzing Speed
 
 Right now, the Unicorefuzz `ucf attach` harness might need to be manually restarted after an amount of pages has been allocated. 
