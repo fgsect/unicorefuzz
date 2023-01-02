@@ -141,6 +141,9 @@ class ProbeWrapper(Unicorefuzz):
         print("[*] Initializing Avatar2")
         target = self.config.init_avatar_target(self, avatar)  # type: Target
 
+        print("[*] Initializing Avatar2 gdb target")
+        self.config.init_gdb_target(target)
+
         target.set_breakpoint("*{}".format(breakaddress))
         print("[+] Breakpoint set at {}".format(breakaddress))
         print("[*] Waiting for bp hit...")

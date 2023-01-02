@@ -229,7 +229,7 @@ class Harness(Unicorefuzz):
 
         # The afl_forkserver_start() method sets the exits correctly.
         # We don't want to actually fork, though, so make sure that return is False.
-        if uc.afl_forkserver_start(exits) != uc.UC_AFL_RET_NO_AFL:
+        if uc.afl_forkserver_start(exits) != UC_AFL_RET_NO_AFL:
             raise Exception(
                 "Debugger cannot run in AFL! Did you mean -t instead of -d?"
             )
@@ -244,7 +244,7 @@ class Harness(Unicorefuzz):
             )
 
         entry_point = self.uc_read_pc(uc)
-        exit_point = self.exits[0]
+        exit_point = exits[0]
 
         # uddbg wants to know some mappings, read the current stat from unicorn to have $something...
         # TODO: Handle mappings differently? Update them at some point? + Proper exit after run?
