@@ -38,14 +38,7 @@ def nop_func(*args, **kwargs) -> None:
     pass
 
 
-def init_avatar_target(ucf: Unicorefuzz, avatar: Avatar) -> Target:
-    """
-    Init the target used by the probe wrapper.
-    The probe_wrapper will set the breakpoint and forward regs and mem using this target.
-    :param ucf: Unicorefuzz instance, access config using ucf.config.
-    :param avatar: Initialized Avatar to add target to.
-    :return: An initialized target, added to Avatar.
-    """
+def init_avatar_target():
     from avatar2 import GDBTarget
 
     target = avatar.add_target(
@@ -170,8 +163,24 @@ UNICOREFUZZ_SPEC = [
         "init_avatar_target",
         Callable[[Unicorefuzz, Avatar], Target],
         lambda config: init_avatar_target,
-        init_avatar_target.__doc__,
+        """
+        Init the target used by the probe wrapper.
+        The probe_wrapper will set the breakpoint and forward regs and mem using this target.
+        :param ucf: Unicorefuzz instance, access config using ucf.config.
+        :param avatar: Initialized Avatar to add target to.
+        :return: An initialized target, added to Avatar.
+        """,
         "ucf, avatar",
+    ),
+    Optional(
+        "init_gdb_target",
+        Callable[[Target], None],
+        lambda config: nop_func,
+        """An initialization function called after attaching to the gdb target and before continuing its execution.
+        This function is useful to perform preliminary steps (e.g. disabling watchdogs, modifying memory etc.),
+        before running the target under gdb.
+        :param target: the avatar gdb target""",
+        "target",
     ),
 ]  # type: List[Union[Required, Optional]]
 
